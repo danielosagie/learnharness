@@ -94,6 +94,15 @@ export function refreshClaudeCodeStatus(execute: AuthStatusExec = requireAuthSta
 	return promise;
 }
 
+/** Each model call needs auth truth, but not a fresh `claude auth status`
+ *  spawn (0.25–0.27 s measured): a turn makes several calls, so a fresh
+ *  cache answers and only a stale one waits for the check. */
+function currentClaudeCodeStatus(): Promise<ClaudeCodeStatus> {
+	const bin = findClaudeBinary();
+	if (statusCache && statusCache.bin === bin && statusCache.until > Date.now()) return Promise.resolve(statusCache.status);
+	return refreshClaudeCodeStatus();
+}
+
 function requireAuthStatus(bin: string): Promise<string> {
 	return new Promise((resolve, reject) => execFile(bin, ["auth", "status"], {
 		encoding: "utf8", timeout: 5000, windowsHide: true, env: claudeEnvironment(),
@@ -169,7 +178,7 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 		try {
 			const bin = findClaudeBinary();
 			if (!bin) throw new Error("Claude Code isn't installed — install it, then refresh Settings.");
-			if (!(await refreshClaudeCodeStatus()).loggedIn) throw new Error("Claude Code isn't signed in — run `claude` in a terminal, then /login.");
+			if (!(await currentClaudeCodeStatus()).loggedIn) throw new Error("Claude Code isn't signed in — run `claude` in a terminal, then /login.");
 			const tools = getCurrentTools(context.messages).map((tool) => ({
 				name: tool.name, description: tool.description, inputSchema: tool.parameters,
 			}));
