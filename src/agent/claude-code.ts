@@ -1,5 +1,5 @@
-import { execFileSync, spawn } from "node:child_process";
-import { accessSync, constants, mkdirSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { accessSync, chmodSync, constants, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import {
@@ -20,6 +20,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { PATHS } from "../../config.ts";
+import { emit } from "../core/events.ts";
 
 export const CLAUDE_CODE_PROVIDER = "claude-code";
 const MODEL_IDS = ["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-haiku-5-5"];
@@ -53,38 +54,53 @@ export function findClaudeBinary(env: Record<string, string | undefined> = proce
 }
 
 let statusCache: { until: number; bin: string | null; status: ClaudeCodeStatus } | null = null;
+let statusRefresh: { bin: string | null; promise: Promise<ClaudeCodeStatus> } | null = null;
+const unavailable = (bin: string | null): ClaudeCodeStatus => ({ installed: bin !== null, loggedIn: false, subscriptionType: null });
+type AuthStatusExec = (bin: string) => Promise<string>;
 
-/** A short cache keeps model catalog reads and the send gate cheap. */
-export function claudeCodeStatus(refresh = false): ClaudeCodeStatus {
+/** Catalog reads return stale status while one async check refreshes it. */
+export function claudeCodeStatus(execute: AuthStatusExec = requireAuthStatus): ClaudeCodeStatus {
 	// Tests opt in to CLI execution with an explicit fake binary. Catalog
 	// reads in unrelated suites must never discover a real user installation.
 	if (process.env.NODE_ENV === "test" && !process.env.LH_CLAUDE_BIN) {
-		return { installed: false, loggedIn: false, subscriptionType: null };
+		return unavailable(null);
 	}
 	const bin = findClaudeBinary();
-	if (!refresh && statusCache && statusCache.bin === bin && statusCache.until > Date.now()) return statusCache.status;
-	let status: ClaudeCodeStatus = { installed: bin !== null, loggedIn: false, subscriptionType: null };
-	if (bin) {
-		try {
-			const result = requireAuthStatus(bin);
-			status = {
-				installed: true,
-				loggedIn: result.loggedIn === true,
-				subscriptionType: typeof result.subscriptionType === "string" ? result.subscriptionType : null,
-			};
-		} catch { /* Missing login and CLI failures both leave the provider unavailable. */ }
-	}
-	statusCache = { until: Date.now() + 60_000, bin, status };
-	return status;
+	if (!statusCache || statusCache.bin !== bin || statusCache.until <= Date.now()) void refreshClaudeCodeStatus(execute);
+	return statusCache?.bin === bin ? statusCache.status : unavailable(bin);
 }
 
-function requireAuthStatus(bin: string): { loggedIn?: boolean; subscriptionType?: string } {
-	const raw = execFileSync(bin, ["auth", "status"], {
-		encoding: "utf8", timeout: 5000, windowsHide: true,
-		env: claudeEnvironment(),
-	});
-	return JSON.parse(raw);
+/** The send gate and status route wait for current auth truth. */
+export function refreshClaudeCodeStatus(execute: AuthStatusExec = requireAuthStatus): Promise<ClaudeCodeStatus> {
+	if (process.env.NODE_ENV === "test" && !process.env.LH_CLAUDE_BIN) return Promise.resolve(unavailable(null));
+	const bin = findClaudeBinary();
+	if (statusRefresh?.bin === bin) return statusRefresh.promise;
+	const promise = (async () => {
+		let status = unavailable(bin);
+		if (bin) {
+			try {
+				const result = JSON.parse(await execute(bin));
+				status = { installed: true, loggedIn: result.loggedIn === true,
+					subscriptionType: typeof result.subscriptionType === "string" ? result.subscriptionType : null };
+			} catch { /* Missing login and CLI failures both leave the provider unavailable. */ }
+		}
+		const previous = statusCache?.status ?? unavailable(bin);
+		statusCache = { until: Date.now() + 60_000, bin, status };
+		if (previous.installed !== status.installed || previous.loggedIn !== status.loggedIn || previous.subscriptionType !== status.subscriptionType) emit("auth-changed", {});
+		return status;
+	})();
+	statusRefresh = { bin, promise };
+	void promise.finally(() => { if (statusRefresh?.promise === promise) statusRefresh = null; });
+	return promise;
 }
+
+function requireAuthStatus(bin: string): Promise<string> {
+	return new Promise((resolve, reject) => execFile(bin, ["auth", "status"], {
+		encoding: "utf8", timeout: 5000, windowsHide: true, env: claudeEnvironment(),
+	}, (error, stdout) => error ? reject(error) : resolve(stdout)));
+}
+
+if (process.env.NODE_ENV !== "test") void refreshClaudeCodeStatus();
 
 /** Only the API credentials are removed; the user's CLI login remains ambient. */
 export function claudeEnvironment(): NodeJS.ProcessEnv {
@@ -96,8 +112,10 @@ export function claudeEnvironment(): NodeJS.ProcessEnv {
 }
 
 function escapeMarkup(value: string): string {
-	return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+	return value.replace(/<(?=\/?(?:user|assistant|tool_call|tool_result)(?=[\s/>]))/gi, "&lt;");
 }
+
+function escapeAttribute(value: string): string { return value.replaceAll('"', "&quot;"); }
 
 type PromptBlock = { type: "text"; text: string } | { type: "image"; source: { type: "base64"; media_type: string; data: string } };
 function imageBlock(image: ImageContent): PromptBlock {
@@ -118,10 +136,10 @@ export function renderClaudeHistory(context: TranscriptContext): PromptBlock[] {
 		} else if (message.role === "assistant") {
 			for (const part of message.content) {
 				if (part.type === "text") blocks.push({ type: "text", text: `<assistant>${escapeMarkup(part.text)}</assistant>` });
-				else if (part.type === "toolCall") blocks.push({ type: "text", text: `<assistant><tool_call id="${escapeMarkup(part.id)}" name="${escapeMarkup(part.name)}">${escapeMarkup(JSON.stringify(part.arguments))}</tool_call></assistant>` });
+				else if (part.type === "toolCall") blocks.push({ type: "text", text: `<assistant><tool_call id="${escapeAttribute(part.id)}" name="${escapeAttribute(part.name)}">${JSON.stringify(part.arguments)}</tool_call></assistant>` });
 			}
 		} else if (message.role === "toolResult") {
-			const attrs = `id="${escapeMarkup(message.toolCallId)}" name="${escapeMarkup(message.toolName)}"${message.isError ? " error" : ""}`;
+			const attrs = `id="${escapeAttribute(message.toolCallId)}" name="${escapeAttribute(message.toolName)}"${message.isError ? " error" : ""}`;
 			for (const part of message.content) {
 				if (part.type === "image") blocks.push(imageBlock(part));
 				else blocks.push({ type: "text", text: `<tool_result ${attrs}>${escapeMarkup(part.text)}</tool_result>` });
@@ -147,20 +165,30 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 	void (async () => {
 		let child: ReturnType<typeof spawn> | undefined;
 		let killTimer: ReturnType<typeof setTimeout> | undefined;
+		let requestDir: string | undefined;
 		try {
 			const bin = findClaudeBinary();
 			if (!bin) throw new Error("Claude Code isn't installed — install it, then refresh Settings.");
-			if (!claudeCodeStatus().loggedIn) throw new Error("Claude Code isn't signed in — run `claude` in a terminal, then /login.");
+			if (!(await refreshClaudeCodeStatus()).loggedIn) throw new Error("Claude Code isn't signed in — run `claude` in a terminal, then /login.");
 			const tools = getCurrentTools(context.messages).map((tool) => ({
 				name: tool.name, description: tool.description, inputSchema: tool.parameters,
 			}));
-			const mcpEnv: Record<string, string> = { LH_CLAUDE_TOOLS: JSON.stringify(tools), ELECTRON_RUN_AS_NODE: "1" };
-			const mcpConfig = JSON.stringify({ mcpServers: { lh: {
-				command: process.execPath, args: [path.join(PATHS.root, "scripts", "claude-code-mcp.mjs")], env: mcpEnv,
-			} } });
+			const requests = path.join(PATHS.data, "claude-code-requests");
+			mkdirSync(requests, { recursive: true, mode: 0o700 });
+			requestDir = mkdtempSync(path.join(requests, "request-"));
+			chmodSync(requestDir, 0o700);
+			const promptFile = path.join(requestDir, "system-prompt.txt");
+			const toolsFile = path.join(requestDir, "tools.json");
+			const mcpFile = path.join(requestDir, "mcp.json");
+			writeFileSync(promptFile, getCurrentSystemPrompt(context.messages), { mode: 0o600 });
+			writeFileSync(toolsFile, JSON.stringify(tools), { mode: 0o600 });
+			writeFileSync(mcpFile, JSON.stringify({ mcpServers: { lh: {
+				command: process.execPath, args: [path.join(PATHS.root, "scripts", "claude-code-mcp.mjs"), toolsFile],
+				env: { ELECTRON_RUN_AS_NODE: "1" },
+			} } }), { mode: 0o600 });
 			const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-				"--include-partial-messages", "--model", model.id, "--system-prompt", getCurrentSystemPrompt(context.messages),
-				"--tools", "", "--strict-mcp-config", "--mcp-config", mcpConfig, "--max-turns", "1",
+				"--include-partial-messages", "--model", model.id, "--system-prompt-file", promptFile,
+				"--tools", "", "--strict-mcp-config", "--mcp-config", mcpFile, "--max-turns", "1",
 				"--setting-sources", "", "--no-session-persistence", "--disable-slash-commands", "--restricted"];
 			const effort = options?.reasoning;
 			if (effort) args.push("--effort", effort === "minimal" ? "low" : effort);
@@ -186,6 +214,7 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 			let sawMessageStop = false;
 			let result: Record<string, unknown> | undefined;
 			let stderr = "";
+			let stdoutTail = "";
 			activeChild.stderr!.setEncoding("utf8");
 			activeChild.stderr!.on("data", (chunk: string) => { stderr = (stderr + chunk).slice(-4096); });
 			activeChild.stdout!.setEncoding("utf8");
@@ -196,7 +225,10 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 					const line = buffer.slice(0, end);
 					buffer = buffer.slice(end + 1);
 					if (!line.trim()) continue;
-					const event = JSON.parse(line) as Record<string, unknown>;
+					let event: Record<string, unknown>;
+					try { event = JSON.parse(line) as Record<string, unknown>; }
+					catch { stdoutTail = (stdoutTail + "\n" + line).slice(-4096); continue; }
+					if (!event || typeof event !== "object" || Array.isArray(event)) continue;
 					if (event.type === "stream_event") {
 						await options?.onProviderStreamEvent?.(event.event, model);
 						const raw = event.event as Record<string, unknown>;
@@ -207,6 +239,7 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 					if (event.type === "result") result = event;
 				}
 			}
+			if (buffer.trim()) stdoutTail = (stdoutTail + "\n" + buffer).slice(-4096);
 			const code = await exited;
 			if (spawnError) throw spawnError;
 			options?.signal?.removeEventListener("abort", abort);
@@ -215,9 +248,9 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 			if (result?.usage && typeof result.usage === "object") applyUsage(output, result.usage as Record<string, unknown>);
 			const hasTool = output.content.some((part) => part.type === "toolCall");
 			const expectedToolLimit = result?.subtype === "error_max_turns" && hasTool && output.rawStopReason === "tool_use";
-			if (result?.is_error && !expectedToolLimit) throw new Error(mapCliError(result, stderr));
-			if (code !== 0 && !expectedToolLimit) throw new Error(mapCliError(result, stderr));
-			if (!result) throw new Error(mapCliError(undefined, stderr));
+			if (result?.is_error && !expectedToolLimit) throw new Error(mapCliError(result, stderr, stdoutTail));
+			if (code !== 0 && !expectedToolLimit) throw new Error(mapCliError(result, stderr, stdoutTail));
+			if (!result) throw new Error(mapCliError(undefined, stderr, stdoutTail));
 			if (!sawMessageStart || !sawMessageStop) throw new Error("Claude Code stream ended before the message completed.");
 			output.stopReason = hasTool ? "toolUse" : output.stopReason === "length" ? "length" : "stop";
 			stream.push({ type: "done", reason: output.stopReason, message: output });
@@ -229,16 +262,19 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 			output.errorMessage = error instanceof Error ? error.message : "Claude Code failed.";
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
+		} finally {
+			if (requestDir) rmSync(requestDir, { recursive: true, force: true });
 		}
 	})();
 	return stream;
 }
 
-function mapCliError(result?: Record<string, unknown>, stderr = ""): string {
-	const detail = `${result?.result ?? ""} ${stderr}`.toLowerCase();
+function mapCliError(result?: Record<string, unknown>, stderr = "", stdoutTail = ""): string {
+	const detail = `${result?.result ?? ""} ${stderr} ${stdoutTail}`.toLowerCase();
 	if (/rate.limit|rate limit|usage limit|hit your limit|limit reached/.test(detail)) return "Claude Code's usage limit was reached. Try again later.";
 	if (/not logged in|not authenticated|login required/.test(detail)) return "Claude Code isn't signed in — run `claude` in a terminal, then /login.";
-	return result ? "Claude Code could not complete this turn. Check `claude` in a terminal." : "Claude Code exited without a result. Check `claude` in a terminal.";
+	const excerpt = (typeof result?.result === "string" ? result.result : stderr || stdoutTail).trim().slice(0, 200);
+	return excerpt ? `Claude Code failed: ${excerpt}` : "Claude Code exited without a result.";
 }
 
 function applyUsage(output: AssistantMessage, usage: Record<string, unknown>) {

@@ -9,7 +9,7 @@ import {
 	type StreamFunction,
 } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
-import { claudeCodeProvider } from "./claude-code.ts";
+import { CLAUDE_CODE_PROVIDER, claudeCodeProvider } from "./claude-code.ts";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { type ModelRole } from "../../config.ts";
 import { DEFAULT_THINKING_ORDER } from "../core/settings.ts";
@@ -50,6 +50,7 @@ export type { ThinkingLevel };
 let collection: ReturnType<typeof createModels> | undefined;
 let credentials: CredentialStore | undefined;
 let credentialIsOAuth: ((providerId: string) => boolean) | undefined;
+const ALWAYS_SUBSCRIPTION_PROVIDERS = new Set([CLAUDE_CODE_PROVIDER]);
 
 /** Storage arrives from the server composition root; the agent layer never imports it. */
 export function configurePiCredentials(store: CredentialStore, isOAuth: (providerId: string) => boolean): void {
@@ -118,7 +119,8 @@ export function piEngineForSpec(spec: ResolvedModelSpec): PiEngine {
 	return {
 		model,
 		level,
-		subscription: models.getProvider(spec.provider)?.auth.oauth?.isSubscription === true && credentialIsOAuth?.(spec.provider) === true,
+		subscription: ALWAYS_SUBSCRIPTION_PROVIDERS.has(spec.provider)
+			|| models.getProvider(spec.provider)?.auth.oauth?.isSubscription === true && credentialIsOAuth?.(spec.provider) === true,
 		// bound streamSimple: the agent loop forwards state.thinkingLevel as
 		// `reasoning` (undefined = off on pi-ai's scale); the clamp above keeps
 		// the pin honest even when config or settings drift off the map.

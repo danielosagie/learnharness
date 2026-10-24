@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 // Claude Code discovers tool schemas here. LearnHarness executes tool calls
 // from the assistant stream itself, so this server must never run a tool.
-const tools = JSON.parse(process.env.LH_CLAUDE_TOOLS ?? "[]");
+const tools = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
 
 createInterface({ input: process.stdin }).on("line", (line) => {
