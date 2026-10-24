@@ -169,8 +169,10 @@ it("GET /api/review returns ordered due picks and nextDueAt", async () => {
 	graphStore.appendNode({ id: "n_due", name: "Due", statement: "A due proposition", aliases: [], createdAt: "2026-01-01T00:00:00.000Z", provenance: [{ chatId: teach.id, messageId: "m" }] });
 	const response = await reviewGET();
 	assert.equal(response.status, 200);
-	const body = await response.json() as { due: { id: string; name: string; statement: string; lane: string; reviews: number }[]; nextDueAt: unknown };
+	const body = await response.json() as { due: { id: string; name: string; statement: string; lane: string; reviews: number; dueAt: number }[]; nextDueAt: unknown };
 	assert.ok(Array.isArray(body.due));
 	assert.deepEqual(body.due.find((item) => item.id === "n_due"), { id: "n_due", name: "Due", statement: "A due proposition", stability: null, difficulty: null, lastReview: null, reviews: 0, retrievability: null, dueAt: Date.parse("2026-01-01T00:00:00.000Z") + 2.3065 * 86_400_000, lane: "new" });
 	assert.ok(body.nextDueAt === null || typeof body.nextDueAt === "string");
+	const selected = await reviewGET(new Request("http://test/api/review?ids=n_due,missing"));
+	assert.deepEqual(await selected.json(), { items: [{ id: "n_due", name: "Due", dueAt: new Date(body.due.find((item) => item.id === "n_due")!.dueAt).toISOString(), lane: "new" }] });
 });

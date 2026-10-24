@@ -24,6 +24,19 @@ export function readReview(now = Date.now()) {
 	};
 }
 
+/** Resolve requested propositions from the same derived review evidence. */
+export function readReviewItems(ids: readonly string[], now = Date.now()) {
+	const graph = getGraph(stores.graphStore);
+	const state = reviewState(readPracticeHistory(), graph.nodes, now, stores.settingsStore.readSettings()?.agent?.desiredRetention ?? 0.9);
+	const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+	return [...new Set(ids)].map((id) => {
+		const node = byId.get(id);
+		if (!node) return null;
+		const review = state.get(node.id);
+		return review ? { id: node.id, name: node.name, dueAt: new Date(review.dueAt).toISOString(), lane: review.lane } : null;
+	}).filter((item) => item !== null);
+}
+
 export function readPracticeHistory(): PracticeHistory {
 	const records: PracticeHistory["records"][number][] = [];
 	const teachChatIds = new Set<string>();
