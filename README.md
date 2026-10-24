@@ -54,8 +54,8 @@ All three platforms support in-app updates.
 
 ## Your keys, your data
 
-- **Your keys and models.** No LearnHarness subscription or markup. You pay your providers for usage; a live cost meter shows model costs.
-- **Local storage.** Your chats, graph, settings, and API keys live on your machine. Learning records are plain files you can inspect.
+- **Your keys and models.** No LearnHarness subscription or markup. Add provider API keys, or sign in with ChatGPT Plus or Pro in Settings → Keys to use OpenAI models through your subscription. Subscription turns keep token counts and show $0 in the cost meter; API key turns use provider prices.
+- **Local storage.** Your chats, graph, settings, API keys, and ChatGPT sign-in credential live on your machine. Learning records are plain files you can inspect. API keys remain in `auth.json`; the subscription credential is in a separate mode-0600 `oauth.json` beside it.
 - **External services.** Models run through your configured providers. Model requests send the context needed for the task; web research and dictation also contact external services. Local storage does not mean offline processing.
 - **Inspectable behavior.** System prompts are visible and editable. The app is open source under the AGPL-3.0 license.
 

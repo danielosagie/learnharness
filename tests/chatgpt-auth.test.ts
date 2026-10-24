@@ -13,6 +13,7 @@ const { OAUTH_FILE, oauthStore, hasOAuthCredential, oauthDeviceId } = await impo
 const { providerKeyPresent, keyStatuses } = await import("../src/server/keys.ts");
 const { startChatGPTLogin, chatGPTStatus, logoutChatGPT } = await import("../src/server/chatgpt-auth.ts");
 const { hasProviderKey } = await import("../components/setup-cta.tsx");
+const { keyStatusLine } = await import("../components/settings/keys-section.tsx");
 const { setupStage } = await import("../components/setup-dialog.tsx");
 const { callCost, turnCost, jobCost } = await import("../src/core/prices.ts");
 const { graphCostSummary } = await import("../src/core/cost-summary.ts");
@@ -99,6 +100,7 @@ describe("ChatGPT login", () => {
 		assert.equal(piEngineForSpec({ provider: "openai", id: "gpt-6-sol" }).subscription, true);
 		delete process.env.OPENAI_API_KEY;
 		assert.equal(keyStatuses().find((row) => row.id === "OPENAI_API_KEY")?.subscription, "chatgpt");
+		assert.equal(keyStatusLine(keyStatuses().find((row) => row.id === "OPENAI_API_KEY")!), "ChatGPT subscription");
 		assert.equal(hasProviderKey(keyStatuses(), [{ id: "openai", envVar: "OPENAI_API_KEY", label: "OpenAI" }]), true);
 		assert.equal(setupStage([{ id: "openai", keyPresent: providerKeyPresent("openai") }]), "pickers");
 		await logoutChatGPT({ logout: async () => oauthStore.delete("openai") } as Pick<Models, "logout">);

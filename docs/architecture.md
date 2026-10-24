@@ -160,9 +160,11 @@ flowchart TB
 
 Storage is **per-entity semantic ports**, never one generic interface: `ChatStore`, `GraphStore`, `JobStore`, `PracticeStore` (`src/core/ports.ts` — types only). The fs adapters (`src/store/{chats,graph,jobs,practice}.ts`) implement them and contain persistence and nothing else. One more adapter (`src/store/render-settings.ts`) is a portless free function re-exported through the server barrel — a deliberate pragmatic bypass, documented here so nobody mistakes it for the pattern.
 
-**Idioms.** Graph evidence lives in **append-only JSONL ledgers** (corrupt-line-tolerant reads; strict shape guards drop invalid lines, never guess). Chats, jobs, positions, sources, and the settings blobs are whole-file read-modify-write JSON. All writes are synchronous, single-process (atomicity rides the Node event loop). Merge/dedup/derivation semantics are **reader-side, in core** — the store never decides.
+**Idioms.** Graph evidence lives in **append-only JSONL ledgers** (corrupt-line-tolerant reads; strict shape guards drop invalid lines, never guess). Chats, jobs, positions, sources, and the settings blobs are whole-file read-modify-write JSON. All writes are synchronous, single-process (atomicity rides the Node event loop). The `src/store/oauth.ts` credential adapter serializes asynchronous pi-ai refresh writes per provider and atomically renames its mode-0600 file. Merge/dedup/derivation semantics are **reader-side, in core** — the store never decides.
 
 - **`src/server/stores.ts` is THE composition root for storage**: it instantiates the adapters and hands the port objects to everything else (chat-handler, job runner, extraction pipeline, practice pipeline, graph/positions/chats routes, turn services). It is the single place a storage decision (JSON vs SQLite, local vs remote) gets re-made.
+- The storage root injects `oauthStore` into the agent layer's pi-ai model collection. `oauth.json` is a sibling of `AUTH_FILE`; `auth.json` stays a flat environment-variable map. Pi-ai resolves a stored OAuth credential before an ambient API key and refreshes under the store's `modify` lock. `src/server/chatgpt-auth.ts` owns one process-wide login, its cancellation and the `/api/auth/chatgpt/*` transport. Auth changes emit `auth-changed` on the events channel; clients refetch status and model availability.
+- Usage records capture `billing: "subscription"` at the model-call boundary. Core price folds then report zero dollars while retaining tokens; later logout cannot reprice past calls. The marker is provider-neutral, while the engine checks pi-ai's `isSubscription` metadata and the stored OAuth credential at construction.
 - **`src/server/chat-handler.ts` is THE composition root for a turn**: it wires the stores, the job runner, the extraction pipeline, the practice pipeline, and the pi engine into the stream response (`setTurnRunner`/`setJobRespawn` register its seams for the wake pipeline). All logic lives behind the seams it calls.
 - The agent layer is dependency-inverted throughout: `createJobRunner({ chatStore, jobStore, deliver })`, `createExtractionPipeline({ chatStore, graphStore, extractor?, auditor?, embedder })`, `createTeacherTools({ chatId, chatStore, jobStore, spawn })`, `createProberAgent`/`createTeacherAgent(engine?, tools?, …)`. Tests inject the same ports production wires — or swap an in-memory port.
 
@@ -479,6 +481,7 @@ Before 2026-10-02 the client discovered server-side change by polling: a lattice
 | `jobs-changed` | `{chatId}` | every job-store write (create/update/delete-that-removed) |
 | `activity-changed` | `{}` | extraction `setPhase`/`finishExtraction`; practice `registerRow`/phase-writes/`finishPractice` |
 | `chats-changed` | `{}` | list-shape writes only: chat create/rename/delete-that-removed |
+| `auth-changed` | `{}` | ChatGPT login state, credential save, cancel, and logout; consumers refetch status and catalog |
 
 ### 10.3 Emitter laws
 
@@ -526,6 +529,7 @@ Every place the architecture is designed to be cut — the "one file" a future c
 | Seam | File | What it swaps |
 |---|---|---|
 | Storage decision (JSON→SQLite, remote) | `src/server/stores.ts` | the adapters, once |
+| OAuth credential and login lifecycle | `src/store/oauth.ts` + `src/server/chatgpt-auth.ts` | private credential persistence and one active sign-in |
 | LLM engine / model per role | settings `models` slots + `src/agent/models.ts` (`piEngineFor`) | provider wiring, one place |
 | Turn composition | `src/server/chat-handler.ts` | what a turn consists of |
 | Extraction trigger | `src/server/turn-service.ts` (`triggerExtraction`) | when the Library runs |
