@@ -9,6 +9,7 @@ import {
 	type StreamFunction,
 } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { claudeCodeProvider } from "./claude-code.ts";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { type ModelRole } from "../../config.ts";
 import { DEFAULT_THINKING_ORDER } from "../core/settings.ts";
@@ -67,6 +68,7 @@ export function piModels() {
 	if (!collection) {
 		collection = createModels({ identity: APP_IDENTITY, credentials });
 		for (const provider of builtinProviders()) collection.setProvider(provider);
+		collection.setProvider(claudeCodeProvider());
 	}
 	return collection;
 }

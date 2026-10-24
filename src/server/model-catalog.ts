@@ -117,11 +117,12 @@ export function catalogSlots(): SlotPins {
 /** The providers surface: one row per model provider, gated by the same
  *  key-or-subscription truth used at the turn boundary. */
 export function catalogProviders(): CatalogProvider[] {
-	return AUTH_PROVIDER_KEYS.map((p) => ({
+	return [...AUTH_PROVIDER_KEYS.map((p) => ({
 		id: p.id,
 		envVar: p.envVar,
 		keyPresent: providerKeyPresent(p.id),
-	})).sort((a, b) => a.id.localeCompare(b.id));
+	})), { id: "claude-code", envVar: "", keyPresent: providerKeyPresent("claude-code") }]
+		.sort((a, b) => a.id.localeCompare(b.id));
 }
 
 /** The providers whose key is present — the picker federates exactly

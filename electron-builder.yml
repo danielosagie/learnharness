@@ -93,6 +93,8 @@ extraResources:
   - from: .next
     to: server
     filter:
+      # build-server.mjs copies scripts/claude-code-mcp.mjs here; the
+      # standalone wildcard carries it beside the server's read-only assets.
       - "standalone/**/*"
 mac:
   icon: build/icon.icon
