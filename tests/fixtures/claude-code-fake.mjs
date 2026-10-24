@@ -30,6 +30,12 @@ if (process.env.LH_FAKE_MODE === "hang") {
 } else if (process.env.LH_FAKE_MODE === "error") {
 	process.stdout.write(`${JSON.stringify({ type: "result", subtype: "error_during_execution", is_error: true, result: "rate limit exceeded" })}\n`);
 	process.exit(1);
+} else if (process.env.LH_FAKE_MODE === "auth-expired") {
+	process.stdout.write(readFileSync(new URL("./claude-code-auth-expired.jsonl", import.meta.url), "utf8"));
+	process.exit(1);
+} else if (process.env.LH_FAKE_MODE === "auth-expired-text") {
+	process.stdout.write(readFileSync(new URL("./claude-code-auth-expired.jsonl", import.meta.url), "utf8").replace('"error":"authentication_failed",', ""));
+	process.exit(1);
 } else if (process.env.LH_FAKE_MODE === "no-result") {
 	process.exit(1);
 } else if (process.env.LH_FAKE_MODE === "stray") {

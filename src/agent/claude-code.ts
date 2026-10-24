@@ -55,8 +55,25 @@ export function findClaudeBinary(env: Record<string, string | undefined> = proce
 
 let statusCache: { until: number; bin: string | null; status: ClaudeCodeStatus } | null = null;
 let statusRefresh: { bin: string | null; promise: Promise<ClaudeCodeStatus> } | null = null;
+let authFailed = false;
 const unavailable = (bin: string | null): ClaudeCodeStatus => ({ installed: bin !== null, loggedIn: false, subscriptionType: null });
+const reportedStatus = (status: ClaudeCodeStatus): ClaudeCodeStatus => authFailed
+	? { ...status, loggedIn: false, subscriptionType: null } : status;
 type AuthStatusExec = (bin: string) => Promise<string>;
+
+function markAuthFailure() {
+	if (authFailed) return;
+	authFailed = true;
+	emit("auth-changed", {});
+}
+
+function clearAuthFailure() {
+	if (!authFailed) return;
+	const previous = reportedStatus(statusCache?.status ?? unavailable(null));
+	authFailed = false;
+	const current = reportedStatus(statusCache?.status ?? unavailable(null));
+	if (previous.installed !== current.installed || previous.loggedIn !== current.loggedIn || previous.subscriptionType !== current.subscriptionType) emit("auth-changed", {});
+}
 
 /** Catalog reads return stale status while one async check refreshes it. */
 export function claudeCodeStatus(execute: AuthStatusExec = requireAuthStatus): ClaudeCodeStatus {
@@ -67,11 +84,17 @@ export function claudeCodeStatus(execute: AuthStatusExec = requireAuthStatus): C
 	}
 	const bin = findClaudeBinary();
 	if (!statusCache || statusCache.bin !== bin || statusCache.until <= Date.now()) void refreshClaudeCodeStatus(execute);
-	return statusCache?.bin === bin ? statusCache.status : unavailable(bin);
+	return reportedStatus(statusCache?.bin === bin ? statusCache.status : unavailable(bin));
 }
 
-/** The send gate and status route wait for current auth truth. */
-export function refreshClaudeCodeStatus(execute: AuthStatusExec = requireAuthStatus): Promise<ClaudeCodeStatus> {
+/** The status route checks current CLI auth; only a user refresh clears a failed request. */
+export async function refreshClaudeCodeStatus(execute: AuthStatusExec = requireAuthStatus, explicit = false): Promise<ClaudeCodeStatus> {
+	const status = await checkClaudeCodeStatus(execute);
+	if (explicit) clearAuthFailure();
+	return reportedStatus(status);
+}
+
+function checkClaudeCodeStatus(execute: AuthStatusExec): Promise<ClaudeCodeStatus> {
 	if (process.env.NODE_ENV === "test" && !process.env.LH_CLAUDE_BIN) return Promise.resolve(unavailable(null));
 	const bin = findClaudeBinary();
 	if (statusRefresh?.bin === bin) return statusRefresh.promise;
@@ -84,9 +107,10 @@ export function refreshClaudeCodeStatus(execute: AuthStatusExec = requireAuthSta
 					subscriptionType: typeof result.subscriptionType === "string" ? result.subscriptionType : null };
 			} catch { /* Missing login and CLI failures both leave the provider unavailable. */ }
 		}
-		const previous = statusCache?.status ?? unavailable(bin);
+		const previous = reportedStatus(statusCache?.status ?? unavailable(bin));
 		statusCache = { until: Date.now() + 60_000, bin, status };
-		if (previous.installed !== status.installed || previous.loggedIn !== status.loggedIn || previous.subscriptionType !== status.subscriptionType) emit("auth-changed", {});
+		const reported = reportedStatus(status);
+		if (previous.installed !== reported.installed || previous.loggedIn !== reported.loggedIn || previous.subscriptionType !== reported.subscriptionType) emit("auth-changed", {});
 		return status;
 	})();
 	statusRefresh = { bin, promise };
@@ -100,7 +124,7 @@ export function refreshClaudeCodeStatus(execute: AuthStatusExec = requireAuthSta
 function currentClaudeCodeStatus(): Promise<ClaudeCodeStatus> {
 	const bin = findClaudeBinary();
 	if (statusCache && statusCache.bin === bin && statusCache.until > Date.now()) return Promise.resolve(statusCache.status);
-	return refreshClaudeCodeStatus();
+	return checkClaudeCodeStatus(requireAuthStatus);
 }
 
 function requireAuthStatus(bin: string): Promise<string> {
@@ -222,6 +246,8 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 			let sawMessageStart = false;
 			let sawMessageStop = false;
 			let result: Record<string, unknown> | undefined;
+			let assistantError: string | undefined;
+			let assistantText = "";
 			let stderr = "";
 			let stdoutTail = "";
 			activeChild.stderr!.setEncoding("utf8");
@@ -246,6 +272,14 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 						translateEvent(raw, output, stream, contentIndexes);
 					}
 					if (event.type === "result") result = event;
+					if (event.type === "assistant" && typeof event.error === "string") assistantError = event.error;
+					if (event.type === "assistant" && event.message && typeof event.message === "object") {
+						const message = event.message as Record<string, unknown>;
+						if (typeof message.error === "string") assistantError = message.error;
+						if (Array.isArray(message.content)) assistantText += message.content
+							.filter((part): part is { type: "text"; text: string } => part?.type === "text" && typeof part.text === "string")
+							.map((part) => part.text).join(" ");
+					}
 				}
 			}
 			if (buffer.trim()) stdoutTail = (stdoutTail + "\n" + buffer).slice(-4096);
@@ -257,10 +291,13 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 			if (result?.usage && typeof result.usage === "object") applyUsage(output, result.usage as Record<string, unknown>);
 			const hasTool = output.content.some((part) => part.type === "toolCall");
 			const expectedToolLimit = result?.subtype === "error_max_turns" && hasTool && output.rawStopReason === "tool_use";
-			if (result?.is_error && !expectedToolLimit) throw new Error(mapCliError(result, stderr, stdoutTail));
-			if (code !== 0 && !expectedToolLimit) throw new Error(mapCliError(result, stderr, stdoutTail));
-			if (!result) throw new Error(mapCliError(undefined, stderr, stdoutTail));
+			if ((result?.is_error || code !== 0 || !result) && !expectedToolLimit) {
+				const message = mapCliError(result, assistantError, assistantText, stderr, stdoutTail);
+				if (message === AUTH_EXPIRED_MESSAGE) markAuthFailure();
+				throw new Error(message);
+			}
 			if (!sawMessageStart || !sawMessageStop) throw new Error("Claude Code stream ended before the message completed.");
+			clearAuthFailure();
 			output.stopReason = hasTool ? "toolUse" : output.stopReason === "length" ? "length" : "stop";
 			stream.push({ type: "done", reason: output.stopReason, message: output });
 			stream.end();
@@ -278,8 +315,11 @@ function streamClaude(model: Model<Api>, context: TranscriptContext, options?: S
 	return stream;
 }
 
-function mapCliError(result?: Record<string, unknown>, stderr = "", stdoutTail = ""): string {
-	const detail = `${result?.result ?? ""} ${stderr} ${stdoutTail}`.toLowerCase();
+const AUTH_EXPIRED_MESSAGE = "Claude Code's sign-in expired — run `claude` in a terminal, then /login.";
+
+function mapCliError(result?: Record<string, unknown>, assistantError = "", assistantText = "", stderr = "", stdoutTail = ""): string {
+	const detail = `${result?.result ?? ""} ${assistantText} ${stderr} ${stdoutTail}`.toLowerCase();
+	if (assistantError === "authentication_failed" || /failed to authenticate|oauth session expired|could not be refreshed/.test(detail)) return AUTH_EXPIRED_MESSAGE;
 	if (/rate.limit|rate limit|usage limit|hit your limit|limit reached/.test(detail)) return "Claude Code's usage limit was reached. Try again later.";
 	if (/not logged in|not authenticated|login required/.test(detail)) return "Claude Code isn't signed in — run `claude` in a terminal, then /login.";
 	const excerpt = (typeof result?.result === "string" ? result.result : stderr || stdoutTail).trim().slice(0, 200);

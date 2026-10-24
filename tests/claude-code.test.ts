@@ -14,6 +14,7 @@ import { runningTurn } from "../src/server/turn-runs.ts";
 import { chatStore } from "../src/store/chats.ts";
 import { providerKeyPresent } from "../src/server/keys.ts";
 import { hasProviderKey } from "../components/setup-cta.tsx";
+import { GET as claudeCodeStatusRoute } from "../app/api/claude-code/route.ts";
 
 const fixture = fileURLToPath(new URL("./fixtures/claude-code-fake.mjs", import.meta.url));
 const model = claudeCodeProvider().getModels().find((entry) => entry.id === "claude-opus-5-5")!;
@@ -24,6 +25,7 @@ function withFake<T>(fn: (dir: string) => Promise<T> | T): Promise<T> {
 	copyFileSync(fixture, bin);
 	copyFileSync(fileURLToPath(new URL("./fixtures/claude-code-tool.jsonl", import.meta.url)), path.join(dir, "claude-code-tool.jsonl"));
 	copyFileSync(fileURLToPath(new URL("./fixtures/claude-code-text.jsonl", import.meta.url)), path.join(dir, "claude-code-text.jsonl"));
+	copyFileSync(fileURLToPath(new URL("./fixtures/claude-code-auth-expired.jsonl", import.meta.url)), path.join(dir, "claude-code-auth-expired.jsonl"));
 	chmodSync(bin, 0o755);
 	const old = { ...process.env };
 	process.env.LH_CLAUDE_BIN = bin;
@@ -170,6 +172,47 @@ describe("Claude Code provider", () => {
 		process.env.LH_FAKE_MODE = "stray";
 		response = await claudeCodeProvider().streamSimple(model, normalizeContext(context())).result();
 		assert.equal(response.stopReason, "stop");
+	}));
+
+	it("reports an expired request as signed out until a successful request", async () => withFake(async () => {
+		await refreshClaudeCodeStatus();
+		const changes: string[] = [];
+		const unsubscribe = subscribe((event) => { if (event.type === "auth-changed") changes.push(event.type); });
+		try {
+			process.env.LH_FAKE_MODE = "auth-expired";
+			const response = await claudeCodeProvider().streamSimple(model, normalizeContext(context())).result();
+			assert.equal(response.errorMessage, "Claude Code's sign-in expired — run `claude` in a terminal, then /login.");
+			assert.deepEqual(claudeCodeStatus(), { installed: true, loggedIn: false, subscriptionType: null });
+			assert.equal(providerKeyPresent("claude-code"), false);
+			assert.deepEqual(changes, ["auth-changed"]);
+			assert.equal((await refreshClaudeCodeStatus()).loggedIn, false);
+			assert.deepEqual(changes, ["auth-changed"]);
+			delete process.env.LH_FAKE_MODE;
+			const success = await claudeCodeProvider().streamSimple(model, normalizeContext(context())).result();
+			assert.equal(success.stopReason, "stop");
+			assert.equal(claudeCodeStatus().loggedIn, true);
+			assert.deepEqual(changes, ["auth-changed", "auth-changed"]);
+		} finally { unsubscribe(); }
+	}));
+
+	it("clears an expired request on explicit refresh", async () => withFake(async () => {
+		await refreshClaudeCodeStatus();
+		process.env.LH_FAKE_MODE = "auth-expired";
+		await claudeCodeProvider().streamSimple(model, normalizeContext(context())).result();
+		const background = await claudeCodeStatusRoute(new Request("http://localhost/api/claude-code"));
+		assert.equal((await background.json()).loggedIn, false);
+		const explicit = await claudeCodeStatusRoute(new Request("http://localhost/api/claude-code?refresh"));
+		assert.equal((await explicit.json()).loggedIn, true);
+		assert.equal(claudeCodeStatus().subscriptionType, "max");
+	}));
+
+	it("recognizes an expired session from assistant text alone", async () => withFake(async () => {
+		await refreshClaudeCodeStatus();
+		process.env.LH_FAKE_MODE = "auth-expired-text";
+		const response = await claudeCodeProvider().streamSimple(model, normalizeContext(context())).result();
+		assert.equal(response.errorMessage, "Claude Code's sign-in expired — run `claude` in a terminal, then /login.");
+		assert.equal(claudeCodeStatus().loggedIn, false);
+		await refreshClaudeCodeStatus(undefined, true);
 	}));
 
 	it("discovers the override, PATH, and home fallback", () => withFake((dir) => {
