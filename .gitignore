@@ -11,8 +11,9 @@ SCOPE.md
 real-data-extraction/
 dist/
 
-# dev auth/keys store (auth-keys wave): repo-root auth.json — secrets never committed
+# Dev credentials stay outside git.
 auth.json
+oauth.json
 
 # dev-fresh launcher scratch (fresh-user sim): disposable per launch
 .fresh-data/

@@ -118,6 +118,8 @@ export interface ExtractionRunUsage {
  * flattened to the fields we persist (undefined = provider didn't report;
  * renderers show absent, never zero). */
 export interface CallUsage {
+	/** How this call was billed, fixed at capture so later logout cannot reprice it. */
+	billing?: "subscription";
 	/** Total input (prompt) tokens, cached portion included. */
 	inputTokens: number | undefined;
 	outputTokens: number | undefined;

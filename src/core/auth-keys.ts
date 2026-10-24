@@ -192,12 +192,14 @@ export interface AuthKeyStatus {
 	/** Catalog metadata when the key is curated; null for unknown-file-var
 	 *  entries (preserved + surfaced, but no curated form to edit through). */
 	info: AuthKeyInfo | null;
-	/** A key is present when EITHER the environment or the file has it. */
+	/** A provider is configured through an env/file key or a subscription credential. */
 	present: boolean;
 	/** The masked tail + character count, e.g. "…ab12 (64 chars)". */
 	masked: string | null;
-	/** Where the live value comes from, given env-wins precedence. */
+	/** Where the API key comes from; "none" can still have a subscription. */
 	source: "env" | "file" | "none";
+	/** A provider can also be unlocked by a stored subscription credential. */
+	subscription?: "chatgpt";
 	/** True when the file holds a value that the environment shadows — the
 	 *  settings page explains why a saved key is not the live one. */
 	shadowedByEnv: boolean;

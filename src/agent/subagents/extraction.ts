@@ -928,15 +928,18 @@ export function createExtractionPipeline(deps: ExtractionPipelineDeps): Extracti
 		);
 		const t0 = performance.now();
 
+		const extractorEngine = stageEngine("extractor", deps.extractor);
 		const findings = await runExtractor(
-			stageEngine("extractor", deps.extractor),
+			extractorEngine,
 			sourceId,
 			prompt,
 			new Set(graph.nodes.map((n) => n.id)),
 			batchIds,
 			signal,
 			(usage, model, step, finishReason, tools) => {
-				recordStep(jobKey, "extractor", callUsage(usage), model);
+				const captured = callUsage(usage);
+				if (extractorEngine?.subscription) captured.billing = "subscription";
+				recordStep(jobKey, "extractor", captured, model);
 				console.info(`[extraction] extractor step ${step}: ${finishReason}, tools: ${tools}`);
 			},
 		);
@@ -960,8 +963,9 @@ export function createExtractionPipeline(deps: ExtractionPipelineDeps): Extracti
 		// projection omits messageId (2026-10-13): the auditor is
 		// IDENTITY-only and never sees the passages, so anchors are useless
 		// to it — they add cognitive load, not signal.
+		const auditorEngine = stageEngine("auditor", deps.auditor);
 		const auditResult = await runAuditor(
-			stageEngine("auditor", deps.auditor),
+			auditorEngine,
 			sourceId,
 			`Proposed findings from the extractor (the source itself is not available to you — the extractor is fully trusted; the propositions only — the reasoning chains are the merger's business, owner 2026-09-30):\n\n` +
 				`${JSON.stringify(
@@ -979,7 +983,9 @@ export function createExtractionPipeline(deps: ExtractionPipelineDeps): Extracti
 				`The current knowledge graph has ${graph.nodes.length} node(s). Explore it with your tools and link what links.`,
 			signal,
 			(usage, model, step, finishReason, tools) => {
-				recordStep(jobKey, "auditor", callUsage(usage), model);
+				const captured = callUsage(usage);
+				if (auditorEngine?.subscription) captured.billing = "subscription";
+				recordStep(jobKey, "auditor", captured, model);
 				console.info(`[extraction] auditor step ${step}: ${finishReason}, tools: ${tools}`);
 			},
 			auditorGraphTools({ chatStore, graphStore }),
@@ -1279,14 +1285,17 @@ export function createExtractionPipeline(deps: ExtractionPipelineDeps): Extracti
 				`${digest === "" ? "" : `, digest ${digest.split("\n").length} lines`})`,
 		);
 		const t0 = performance.now();
+		const extractorEngine = stageEngine("extractor", deps.extractor);
 		const findings = await runNotesExtractor(
-			stageEngine("extractor", deps.extractor),
+			extractorEngine,
 			input.id,
 			prompt,
 			new Set(graph.nodes.map((n) => n.id)),
 			signal,
 			(usage, model, step, finishReason, tools) => {
-				recordStep(jobKey, "extractor", callUsage(usage), model);
+				const captured = callUsage(usage);
+				if (extractorEngine?.subscription) captured.billing = "subscription";
+				recordStep(jobKey, "extractor", captured, model);
 				console.info(`[extraction] extractor step ${step}: ${finishReason}, tools: ${tools}`);
 			},
 		);

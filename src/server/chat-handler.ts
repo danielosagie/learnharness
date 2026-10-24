@@ -306,6 +306,7 @@ export async function handleChatInput(
 	const steps: CallUsage[] = [];
 	const collectUsage = (usage: Usage) => {
 		steps.push({
+			...(conversationEngine.subscription ? { billing: "subscription" as const } : {}),
 			inputTokens: usage.input,
 			outputTokens: usage.output,
 			cacheReadTokens: usage.cacheRead,

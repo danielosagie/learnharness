@@ -1662,9 +1662,10 @@ export function sumSteps(steps: readonly CallUsage[]): CallUsage {
  *  or the usage fields are absent (never guess a price). Cached input bills
  *  at the cache-read rate; cache writes bill separately where priced. */
 export function callCost(
-	usage: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number },
+	usage: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number; billing?: "subscription" },
 	model: string,
 ): number | null {
+	if (usage.billing === "subscription") return 0;
 	const price = PRICES[model];
 	if (!price) return null;
 	if (usage.inputTokens === undefined || usage.outputTokens === undefined) return null;

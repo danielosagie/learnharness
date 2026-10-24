@@ -52,6 +52,7 @@ import {
 	validateKeyShape,
 } from "../core/auth-keys.ts";
 import { authStore } from "../store/auth.ts";
+import { hasOAuthCredential } from "../store/oauth.ts";
 
 // The once-per-process boot record — globalThis anchor (HMR re-imports the
 // module; the snapshot must not re-run and misread fill-gapped vars as real
@@ -178,7 +179,17 @@ export function resolveKeyStatuses(
 
 /** The GET view: every curated key (present or not) + unknown file vars. */
 export function keyStatuses(): AuthKeyStatus[] {
-	return resolveKeyStatuses(authStore.authVars(), process.env, boot().realEnv, AUTH_PROVIDER_ENV_VARS);
+	const rows = resolveKeyStatuses(authStore.authVars(), process.env, boot().realEnv, AUTH_PROVIDER_ENV_VARS);
+	if (hasOAuthCredential("openai")) {
+		const row = rows.find((status) => status.id === "OPENAI_API_KEY");
+		if (row) {
+			row.present = true;
+			row.subscription = "chatgpt";
+		} else {
+			rows.push({ id: "OPENAI_API_KEY", info: null, present: true, masked: null, source: "none", shadowedByEnv: false, subscription: "chatgpt" });
+		}
+	}
+	return rows;
 }
 
 /** The live value for one var, env-first (the env-wins rule) — the canonical
@@ -193,13 +204,11 @@ export function keyValue(id: string): string | undefined {
 	return process.env[id] ?? authStore.authVars()[id];
 }
 
-/** The key-presence truth for one model provider (provider-key interlude,
- * 2026-09-25): would this provider's key be present at request time?
- * Reads through keyValue — the SAME env-first lookup pi-ai performs
- * natively at every request — so an env-shadowed key counts as present
- * (gate by what would run). Providers absent from AUTH_PROVIDER_KEYS take
- * no key at all: nothing to gate, present by definition. */
+/** Would the provider authenticate at request time? Stored OpenAI OAuth
+ * wins over an API key in pi-ai; otherwise use the same env-first key
+ * lookup it uses. Providers without a key entry need no gate. */
 export function providerKeyPresent(provider: string): boolean {
+	if (provider === "openai" && hasOAuthCredential(provider)) return true;
 	const info = AUTH_PROVIDER_KEYS.find((p) => p.id === provider);
 	return info ? keyValue(info.envVar) !== undefined : true;
 }
