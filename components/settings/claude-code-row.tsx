@@ -20,11 +20,11 @@ export function ClaudeCodeRow({ events = true }: { events?: boolean }) {
 	const [status, setStatus] = useState<Status | null>(null);
 	const [failed, setFailed] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
-	const refresh = async () => {
+	const refresh = async (explicit = false) => {
 		setRefreshing(true);
 		setFailed(false);
 		try {
-			const response = await fetch("/api/claude-code");
+			const response = await fetch(explicit ? "/api/claude-code?refresh" : "/api/claude-code");
 			if (!response.ok) throw new Error("Status unavailable");
 			setStatus(await response.json() as Status);
 			notifySettingsSaved("keys");
@@ -48,7 +48,7 @@ export function ClaudeCodeRow({ events = true }: { events?: boolean }) {
 				<span className="flex items-center gap-2 font-ui text-xs text-muted-foreground">
 					<span>{line}</span>
 					{status && !status.installed && <a href="https://code.claude.com/docs/en/setup" target="_blank" rel="noreferrer" className="underline">Install ↗</a>}
-					<button type="button" onClick={() => void refresh()} disabled={refreshing} className="rounded-sm border border-border px-1.5 py-0.5 text-foreground disabled:opacity-40">Refresh</button>
+					<button type="button" onClick={() => void refresh(true)} disabled={refreshing} className="rounded-sm border border-border px-1.5 py-0.5 text-foreground disabled:opacity-40">Refresh</button>
 				</span>
 			</div>
 		</div>
