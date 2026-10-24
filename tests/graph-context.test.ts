@@ -29,6 +29,7 @@ const { toLlmMessages } = await import("../src/core/native-messages.ts");
 import type { LhMessage } from "../src/core/native-messages.ts";
 const { projectView } = await import("../src/core/view.ts");
 const { POST } = await import("../app/api/chats/route.ts");
+const { GET: reviewGET } = await import("../app/api/review/route.ts");
 const { initialPromptOwed } = await import("../components/chat.tsx");
 const { chatStore } = await import("../src/store/chats.ts");
 const { graphStore } = await import("../src/store/graph.ts");
@@ -135,7 +136,7 @@ describe("POST /api/chats — graphContext becomes message[0]", () => {
 		const m = record.messages[0] as { role: string; customType: string; content: string };
 		assert.equal(m.role, "custom");
 		assert.equal(m.customType, "graph-context");
-		assert.ok(m.content.includes("- [n_a] Modus ponens: If P implies Q and P holds, Q holds."));
+		assert.ok(m.content.includes("- [n_a] Modus ponens: If P implies Q and P holds, Q holds. (new)"));
 		// the chain AMONG the picks rides the marker (formatChainLine shape — names)
 		assert.ok(m.content.includes("- Modus ponens → Soundness"));
 	});
@@ -151,4 +152,25 @@ describe("POST /api/chats — graphContext becomes message[0]", () => {
 			assert.equal(chatStore.getChat(id)!.messages.length, 0);
 		}
 	});
+
+	it("caps a practice chat's marker at 64 picks", async () => {
+		const picks = Array.from({ length: 65 }, (_, i) => ({ id: `n_${i}`, name: `N${i}`, statement: `S${i}` }));
+		const res = await POST(new Request("http://test/api/chats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "Due", kind: "practice", graphContext: { propositions: picks } }) }));
+		const { id } = await res.json() as { id: string };
+		const marker = chatStore.getChat(id)!.messages[0] as { details: { propositions: unknown[] }; content: string };
+		assert.equal(marker.details.propositions.length, 64);
+		assert.ok(marker.content.includes("[n_63]"));
+		assert.ok(!marker.content.includes("[n_64]"));
+	});
+});
+
+it("GET /api/review returns ordered due picks and nextDueAt", async () => {
+	const teach = chatStore.createChat("Teaching");
+	graphStore.appendNode({ id: "n_due", name: "Due", statement: "A due proposition", aliases: [], createdAt: "2026-01-01T00:00:00.000Z", provenance: [{ chatId: teach.id, messageId: "m" }] });
+	const response = await reviewGET();
+	assert.equal(response.status, 200);
+	const body = await response.json() as { due: { id: string; name: string; statement: string; lane: string; reviews: number }[]; nextDueAt: unknown };
+	assert.ok(Array.isArray(body.due));
+	assert.deepEqual(body.due.find((item) => item.id === "n_due"), { id: "n_due", name: "Due", statement: "A due proposition", stability: null, difficulty: null, lastReview: null, reviews: 0, retrievability: null, dueAt: Date.parse("2026-01-01T00:00:00.000Z") + 2.3065 * 86_400_000, lane: "new" });
+	assert.ok(body.nextDueAt === null || typeof body.nextDueAt === "string");
 });

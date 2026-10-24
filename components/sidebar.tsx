@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { fuzzyScore } from "@/src/core";
 import { useServerEvent, useServerResync } from "@/components/server-events";
+import { PracticeDueButton } from "@/components/practice-due-button";
 import type { ChatListItem } from "@/src/core";
 import { kbdEventForAction } from "@/src/core";
 
@@ -696,6 +697,7 @@ function SessionsSidebar() {
 						<span className="sr-only">create a new practice session</span>
 					</button>
 				</div>
+				<PracticeDueButton className="mx-3 mb-2" />
 
 				<div className="mx-3 mb-2 flex items-center gap-2">
 					<span className="text-xs uppercase tracking-widest text-muted-foreground/70">Sessions</span>
