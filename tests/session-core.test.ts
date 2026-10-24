@@ -493,7 +493,7 @@ describe("resumeStream (the reattach path)", () => {
 			urls.push(url);
 			if (url === "/api/chats/chat_x") return Response.json({ messages: [] });
 			if (url === "/api/chats/chat_x/stream")
-				return dripped(sse({ type: "message_start", message: { role: "assistant", content: [{ type: "text", text: "hi" }] } }, "[DONE]"), 8);
+				return dripped(": ping\n\n" + sse({ type: "message_start", message: { role: "assistant", content: [{ type: "text", text: "hi" }] } }, "[DONE]"), 8);
 			throw new Error(`unexpected fetch: ${url}`);
 		}) as typeof globalThis.fetch;
 		const m = model();

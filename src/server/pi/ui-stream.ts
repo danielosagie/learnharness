@@ -327,11 +327,46 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
  * GET /api/chats/[id]/stream are BOTH this: same headers, same wire
  * dialect, one protocol for the client to consume. */
 export function piTurnResponse(handle: PiTurnHandle): Response {
-	return new Response(handle.subscribe(), {
+	return new Response(withTurnHeartbeat(handle.subscribe()), {
 		headers: {
 			"Content-Type": "text/event-stream",
 			"Cache-Control": "no-cache, no-transform",
 			"X-Accel-Buffering": "no",
+		},
+	});
+}
+
+/** Comments keep an idle attached turn alive without changing wire events. */
+export function withTurnHeartbeat(source: ReadableStream<Uint8Array>, intervalMs = 25_000): ReadableStream<Uint8Array> {
+	const reader = source.getReader();
+	let timer: ReturnType<typeof setInterval> | undefined;
+	let closed = false;
+	return new ReadableStream<Uint8Array>({
+		start(controller) {
+			timer = setInterval(() => {
+				if (!closed) controller.enqueue(new TextEncoder().encode(": ping\n\n"));
+			}, intervalMs);
+			void (async () => {
+				try {
+					for (;;) {
+						const { done, value } = await reader.read();
+						if (done) break;
+						if (!closed) controller.enqueue(value);
+						else break;
+					}
+					if (!closed) controller.close();
+				} catch (error) {
+					if (!closed) controller.error(error);
+				} finally {
+					closed = true;
+					if (timer) clearInterval(timer);
+				}
+			})();
+		},
+		cancel() {
+			closed = true;
+			if (timer) clearInterval(timer);
+			return reader.cancel();
 		},
 	});
 }
