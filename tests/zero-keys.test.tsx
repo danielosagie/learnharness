@@ -58,7 +58,7 @@ describe("ZeroKeysPill — the composer-hoisted notice", () => {
 	it("the pill takes the CTA's chrome with its own testid and copy", () => {
 		const html = renderToStaticMarkup(createElement(ZeroKeysPill, { onOpen: () => {} }));
 		assert.ok(html.includes('data-testid="setup-cta-keys"'));
-		assert.match(html, />Add a provider key<\/button>/);
+		assert.match(html, />Set up AI<\/button>/);
 		assert.doesNotMatch(html, /chats start|—/);
 		// the models CTA's testid must not appear on the keys pill
 		assert.ok(!html.includes('data-testid="setup-cta"'));
@@ -86,6 +86,8 @@ describe("SetupKeysBody — stage 1's self-contained first-key screen", () => {
 		assert.ok(html.includes("Choose your AI provider and paste its API key. You’ll pick your models next."));
 		assert.doesNotMatch(html, /First, add|keys unlock/);
 		assert.match(html, /Sign in with ChatGPT/);
+		assert.ok(html.includes('data-testid="claude-code-row"'));
+		assert.ok(html.includes("Use your Claude Code login"));
 		assert.ok(html.includes('data-testid="setup-key-provider"'));
 		assert.ok(html.includes("Pick a provider…"));
 		assert.ok(!html.includes('data-testid="setup-key-input"'), "no paste field before a provider is picked");
