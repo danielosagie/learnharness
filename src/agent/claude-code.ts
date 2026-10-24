@@ -56,6 +56,11 @@ let statusCache: { until: number; bin: string | null; status: ClaudeCodeStatus }
 
 /** A short cache keeps model catalog reads and the send gate cheap. */
 export function claudeCodeStatus(refresh = false): ClaudeCodeStatus {
+	// Tests opt in to CLI execution with an explicit fake binary. Catalog
+	// reads in unrelated suites must never discover a real user installation.
+	if (process.env.NODE_ENV === "test" && !process.env.LH_CLAUDE_BIN) {
+		return { installed: false, loggedIn: false, subscriptionType: null };
+	}
 	const bin = findClaudeBinary();
 	if (!refresh && statusCache && statusCache.bin === bin && statusCache.until > Date.now()) return statusCache.status;
 	let status: ClaudeCodeStatus = { installed: bin !== null, loggedIn: false, subscriptionType: null };

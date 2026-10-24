@@ -33,6 +33,16 @@ function withFake<T>(fn: (dir: string) => Promise<T> | T): Promise<T> {
 const context = (messages: Context["messages"] = []): Context => ({ systemPrompt: "Teach clearly.", messages });
 
 describe("Claude Code provider", () => {
+	it("never discovers a real CLI during unrelated catalog tests", () => {
+		const previous = process.env.LH_CLAUDE_BIN;
+		delete process.env.LH_CLAUDE_BIN;
+		try {
+			assert.deepEqual(claudeCodeStatus(true), { installed: false, loggedIn: false, subscriptionType: null });
+		} finally {
+			if (previous !== undefined) process.env.LH_CLAUDE_BIN = previous;
+		}
+	});
+
 	it("streams text and subscription-priced usage through the real engine factory", async () => withFake(async (dir) => {
 		const engine = piEngineForSpec({ provider: "claude-code", id: model.id, thinkingLevel: "off" });
 		const events = [];
