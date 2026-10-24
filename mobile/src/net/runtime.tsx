@@ -1,17 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { AppState } from "react-native";
-import * as SecureStore from "expo-secure-store";
+import { credentialStore as store } from "../platform/credentials";
 import { fetch as expoFetch } from "expo/fetch";
 import * as ExpoCrypto from "expo-crypto";
 import { router } from "expo-router";
+import { reconnectPause } from "./sse";
 import { PhoneClient, type Credentials } from "./client";
 
-const KEY = "learnharness-phone-credentials";
 if (!globalThis.crypto?.randomUUID) (globalThis as { crypto?: { randomUUID: () => string } }).crypto = { randomUUID: ExpoCrypto.randomUUID };
-const store = {
-	async get(): Promise<Credentials | null> { const raw = await SecureStore.getItemAsync(KEY); return raw ? JSON.parse(raw) : null; },
-	async set(value: Credentials | null): Promise<void> { if (value) await SecureStore.setItemAsync(KEY, JSON.stringify(value)); else await SecureStore.deleteItemAsync(KEY); },
-};
 export interface PhoneContextValue {
 	client: PhoneClient;
 	credentials: Credentials | null;
@@ -20,6 +16,7 @@ export interface PhoneContextValue {
 	removed: string | null;
 	eventVersion: number;
 	foregroundVersion: number;
+	foreground: boolean;
 	refresh(): Promise<void>;
 }
 const Context = createContext<PhoneContextValue | null>(null);
@@ -32,7 +29,7 @@ export function PhoneProvider({ children }: { children: React.ReactNode }) {
 	const [eventVersion, setEventVersion] = useState(0);
 	const [foregroundVersion, setForegroundVersion] = useState(0);
 	const [foreground, setForeground] = useState(true);
-	const client = useMemo(() => new PhoneClient(store, expoFetch as typeof fetch, (name) => { setRemoved(name); setCredentials(null); setConnected(false); router.replace("/pair"); }), []);
+	const client = useMemo(() => new PhoneClient(store, ((input, init) => expoFetch(input, init as never)) as typeof fetch, (name) => { setRemoved(name); setCredentials(null); setConnected(false); router.replace("/pair"); }), []);
 	const refresh = useCallback(async () => { const creds = await client.restore(); setCredentials(creds); setReady(true); if (creds) { setRemoved(null); try { await client.hello(); setConnected(true); } catch { setConnected(false); } } else setConnected(false); }, [client]);
 	useEffect(() => { void refresh(); }, [refresh]);
 	useEffect(() => {
@@ -47,7 +44,8 @@ export function PhoneProvider({ children }: { children: React.ReactNode }) {
 			let delay = 1000;
 			while (active) {
 				try {
-					await client.hello();
+					await client.hello(undefined, abort.signal);
+					if (!active) break;
 					setConnected(true);
 					setEventVersion((v) => v + 1);
 					for await (const frame of client.stream("/api/events", abort.signal)) {
@@ -58,11 +56,11 @@ export function PhoneProvider({ children }: { children: React.ReactNode }) {
 					}
 				} catch { if (active) setConnected(false); }
 				if (!active) break;
-				await new Promise((resolve) => setTimeout(resolve, Math.min(30_000, delay * (0.75 + Math.random() * 0.5))));
+				await reconnectPause(Math.min(30_000, delay * (0.75 + Math.random() * 0.5)), abort.signal);
 				delay = Math.min(30_000, delay * 2);
 			}
 		})();
 		return () => { active = false; abort.abort(); };
 	}, [client, credentials, foreground]);
-	return <Context.Provider value={{ client, credentials, ready, connected, removed, eventVersion, foregroundVersion, refresh }}>{children}</Context.Provider>;
+	return <Context.Provider value={{ client, credentials, ready, connected, removed, eventVersion, foregroundVersion, foreground, refresh }}>{children}</Context.Provider>;
 }

@@ -39,6 +39,17 @@ export async function* sseFrames(body: ReadableStream<Uint8Array>): AsyncGenerat
 		}
 		for (const frame of parser.push(decoder.decode())) yield frame;
 	} finally {
+		await reader.cancel().catch(() => {});
 		reader.releaseLock();
 	}
+}
+
+/** Backgrounding cancels backoff as well as the stream reader. */
+export function reconnectPause(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve) => {
+		if (signal.aborted) { resolve(); return; }
+		const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
+		const timer = setTimeout(done, ms);
+		signal.addEventListener("abort", done, { once: true });
+	});
 }
