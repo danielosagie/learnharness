@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
+import { mathSvg } from '../src/render/math.ts';
+const chat = JSON.parse(fs.readFileSync(new URL('../fixtures/teach-final.json', import.meta.url), 'utf8'));
+const formulas: string[] = [];
+for (const message of chat.messages) for (const block of message.content ?? []) if (block.type === 'text') for (const match of block.text.matchAll(/\$\$([\s\S]*?)\$\$|(?<!\$)\$([^$\n]+)\$(?!\$)/g)) formulas.push(match[1] ?? match[2]);
+const heaviest = [...new Set(formulas)].sort((a, b) => b.length - a.length).slice(0, 20);
+const times = heaviest.map((formula) => { const start = performance.now(); mathSvg(formula); return performance.now() - start; }).sort((a, b) => a - b);
+const percentile = (p: number) => times[Math.ceil(p * times.length) - 1];
+console.log(JSON.stringify({ formulas: times.length, p50Ms: percentile(0.5), p95Ms: percentile(0.95), maxMs: times.at(-1) }, null, 2));
