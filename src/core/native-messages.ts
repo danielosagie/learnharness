@@ -197,6 +197,7 @@ export interface GraphContextPick {
 	id: string;
 	name: string;
 	statement: string;
+	tag?: string;
 }
 
 /** The session's map context (owner, 2026-10-04): a SEPARATE custom
@@ -221,7 +222,7 @@ export function newGraphContextMessage(picks: readonly GraphContextPick[], chain
 		"[Session context] — picked from the learner's knowledge map when starting this session:",
 		"",
 		"Propositions (id — name: statement; the problem tool's target field uses these ids):",
-		...picks.map((p) => `- [${p.id}] ${p.name}: ${p.statement}`),
+		...picks.map((p) => `- [${p.id}] ${p.name}: ${p.statement}${p.tag ? ` (${p.tag})` : ""}`),
 	];
 	if (chains.length > 0) {
 		lines.push("", "Reasoning chains among them (premises → conclusion):", ...chains.map((c) => `- ${c}`));

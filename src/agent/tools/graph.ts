@@ -2,7 +2,8 @@ import { Type } from "typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { serverExecute } from "../tool-execute.ts";
 import { getGraph, graphSessionIndex, graphSessionPropositions } from "../../core/graph.ts";
-import type { ChatStore, GraphStore } from "../../core/ports.ts";
+import { practiceRecordsFromChat, reviewState } from "../../core/review.ts";
+import type { ChatStore, GraphStore, SettingsStore } from "../../core/ports.ts";
 
 /**
  * THE PROBER'S GRAPH TOOLS (wave 7, owner-locked 2026-09-23): context
@@ -10,7 +11,7 @@ import type { ChatStore, GraphStore } from "../../core/ports.ts";
  * reads the learner's persistent knowledge map through two tools instead,
  * replacing the old injected block with on-demand eyes.
  *
- * Names + levels + dating ONLY — no statement text, no session contents
+ * Names + practice timing ONLY — no statement text, no session contents
  * (owner ruling: the map's ORGANIZATION is the prober's business, its
  * prose is not). The data comes from Platform's pure core seams
  * (graphSessionIndex / graphSessionPropositions) over the same ports the
@@ -27,6 +28,7 @@ import type { ChatStore, GraphStore } from "../../core/ports.ts";
 export interface GraphToolContext {
 	chatStore: ChatStore;
 	graphStore: GraphStore;
+	settingsStore?: SettingsStore;
 }
 
 const listSessionsInput = Type.Object({});
@@ -64,14 +66,24 @@ export function proberGraphTools(ctx: GraphToolContext): Record<string, AgentToo
 			label: "list_propositions",
 			description:
 				"List the propositions BORN in one knowledge-graph session — what was covered there. " +
-				"Names only — no statement text, no session contents (owner ruling 2026-09-23: the map's ORGANIZATION is your business, its prose is not).",
+				"Names and practice timing only — no statement text or session contents. An overdue premise may need a fresh probe.",
 			parameters: listPropositionsInput,
 			execute: serverExecute("list_propositions", listPropositionsInput, async ({ session }): Promise<string> => {
 				const propositions = graphSessionPropositions(deps, session);
 				if (propositions.length === 0) {
 					return `No propositions born in session "${session}". Call list_sessions for the current ids.`;
 				}
-				const lines = propositions.map((p) => `- ${p.name}`);
+				const summaries = deps.chatStore.listChats();
+				const records = summaries.filter((chat) => chat.kind === "practice").flatMap((chat) => practiceRecordsFromChat(chat.id, deps.chatStore.getChat(chat.id)?.messages ?? []));
+				const teachChatIds = new Set(summaries.filter((chat) => chat.kind === "teach").map((chat) => chat.id));
+				const now = Date.now();
+				const state = reviewState({ records, teachChatIds }, getGraph(deps.graphStore).nodes, now, ctx.settingsStore?.readSettings()?.agent?.desiredRetention ?? 0.9);
+				const lines = propositions.map((p) => {
+					const review = state.get(p.nodeId);
+					if (!review?.lastReview) return `- ${p.name} · never practised`;
+					const days = Math.max(0, Math.floor((now - review.lastReview) / 86_400_000));
+					return `- ${p.name} · last practised ${days}d ago${review.dueAt <= now ? " · due" : ""}`;
+				});
 				return `${propositions.length} proposition(s) covered in this session:\n${lines.join("\n")}`;
 			}),
 		},

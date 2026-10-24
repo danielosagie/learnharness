@@ -380,7 +380,7 @@ export async function handleChatInput(
 							spawn: (job, input) => void jobRunner.runJob(job.id, input),
 							searchAvailable,
 						},
-						...(graphToolsEnabled(effective) ? { graph: { chatStore: stores.chatStore, graphStore: stores.graphStore } } : {}),
+						...(graphToolsEnabled(effective) ? { graph: { chatStore: stores.chatStore, graphStore: stores.graphStore, settingsStore: stores.settingsStore } } : {}),
 					},
 					agentOpts,
 				)
@@ -411,7 +411,7 @@ export async function handleChatInput(
 						// The map reader (wave 7): the prober reads the learner's
 						// knowledge graph through tools when the gate opens —
 						// graph master switch AND the agent.graphTools toggle.
-						...(graphToolsEnabled(effective) ? { graphStore: stores.graphStore } : {}),
+						...(graphToolsEnabled(effective) ? { graphStore: stores.graphStore, settingsStore: stores.settingsStore } : {}),
 					},
 					agentOpts,
 				);

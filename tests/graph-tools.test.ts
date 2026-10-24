@@ -147,7 +147,7 @@ describe("list_sessions", () => {
 });
 
 describe("list_propositions", () => {
-	it("names only — what the session covered (2026-09-27: no levels, no dating)", async () => {
+	it("names and practice recency — without levels or statement text", async () => {
 		const { chatStore, graphStore } = fakeStores([
 			node("n1", "Water cycle", [pt("c1")]),
 			node("n2", "Evaporation", [pt("c1")]),
@@ -157,10 +157,26 @@ describe("list_propositions", () => {
 		assert.match(out, /2 proposition\(s\) covered in this session:/);
 		assert.match(out, /- Water cycle/);
 		assert.match(out, /- Evaporation/);
+		assert.match(out, /- Water cycle · never practised/);
 		// The owner ruling: no levels, no dating, never the statement text.
 		assert.ok(!out.includes("as of"));
 		assert.ok(!out.includes("solid"));
 		assert.ok(!out.includes("statement of"));
+	});
+
+	it("marks an overdue practiced premise as due", async () => {
+		const { chatStore, graphStore } = fakeStores([node("n1", "Water cycle", [pt("c1")])]);
+		const at = Date.now() - 30 * 86_400_000;
+		chatStore.listChats = () => [{ id: "c1", kind: "teach" }, { id: "p1", kind: "practice" }] as never;
+		chatStore.getChat = (id) => id === "p1" ? ({ id, kind: "practice", messages: [
+			{ role: "assistant", content: [{ type: "toolCall", id: "pose", name: "problem", arguments: { target: ["n1"] } }], timestamp: at },
+			{ role: "toolResult", toolCallId: "pose", isError: false },
+			{ role: "assistant", content: [{ type: "toolCall", id: "done", name: "conclude", arguments: { outcome: "solved", rung: null, missClass: null } }], timestamp: at },
+			{ role: "toolResult", toolCallId: "done", isError: false },
+		] } as never) : null;
+		const tools = createProberTools({ ...baseCtx, chatStore, graphStore });
+		const out = (await tools.list_propositions!.execute!("tc", { session: "c1" })).details as string;
+		assert.match(out, /Water cycle · last practised 30d ago · due/);
 	});
 
 	it("no evaluation machinery at all — the covered list is the whole output", async () => {

@@ -16,6 +16,8 @@
  */
 
 export * from "./contracts.ts";
+export type * from "./contracts/review.ts";
+export * from "./review.ts";
 export * from "./ports.ts";
 export * from "./chains.ts";
 export * from "./render-settings.ts";
