@@ -78,7 +78,8 @@ describe("SetupKeysBody — stage 1's self-contained first-key screen", () => {
 		);
 		assert.match(html, /Add a provider key\./);
 		assert.ok(html.includes("Choose your AI provider and paste its API key. You’ll pick your models next."));
-		assert.doesNotMatch(html, /First, add|keys unlock|—/);
+		assert.doesNotMatch(html, /First, add|keys unlock/);
+		assert.match(html, /Sign in with ChatGPT/);
 		assert.ok(html.includes('data-testid="setup-key-provider"'));
 		assert.ok(html.includes("Pick a provider…"));
 		assert.ok(!html.includes('data-testid="setup-key-input"'), "no paste field before a provider is picked");

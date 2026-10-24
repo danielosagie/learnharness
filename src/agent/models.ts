@@ -5,6 +5,7 @@ import {
 	type Api,
 	type Model,
 	type Models,
+	type CredentialStore,
 	type StreamFunction,
 } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
@@ -36,6 +37,8 @@ export const APP_IDENTITY = Object.freeze({
 export interface PiEngine {
 	model: Model<Api>;
 	streamFn: StreamFunction;
+	/** Captured auth mode for this engine's usage record. */
+	subscription?: boolean;
 	/** The resolved (config-or-settings, CLAMPED) thinking level —
 	 *  observability + tests; the streamFn pins it anyway. */
 	level?: ThinkingLevel;
@@ -44,18 +47,25 @@ export interface PiEngine {
 export type { ThinkingLevel };
 
 let collection: ReturnType<typeof createModels> | undefined;
+let credentials: CredentialStore | undefined;
+let credentialIsOAuth: ((providerId: string) => boolean) | undefined;
+
+/** Storage arrives from the server composition root; the agent layer never imports it. */
+export function configurePiCredentials(store: CredentialStore, isOAuth: (providerId: string) => boolean): void {
+	if (credentials === store) return;
+	credentials = store;
+	credentialIsOAuth = isOAuth;
+	collection = undefined;
+}
 
 /** The process-wide pi-ai Models collection — EVERY builtin provider's
  *  catalog (model slots wave, 2026-09-20): engines and the picker resolve
  *  against all of pi-ai's per-provider catalogs, so a settings slot can pin
- *  any native model id. Auth is resolved per request by pi-ai itself from
- *  the environment (the keys seam reflects file-saved keys into env), and
- *  a provider with no key simply fails its stream with "not configured" —
- *  honest, late, and unreachable through the picker, which gates on
- *  keyPresent. */
+ *  any native model id. Pi-ai resolves the injected credential store before
+ *  ambient keys; the picker and turn boundary share the availability gate. */
 export function piModels() {
 	if (!collection) {
-		collection = createModels({ identity: APP_IDENTITY });
+		collection = createModels({ identity: APP_IDENTITY, credentials });
 		for (const provider of builtinProviders()) collection.setProvider(provider);
 	}
 	return collection;
@@ -89,10 +99,8 @@ function defaultThinkingLevel(model: Model<Api>): ThinkingLevel {
 }
 
 /** The production engine for a RESOLVED spec (model slots wave,
- *  2026-09-20): provider-aware catalog lookup + thinking clamp. The API
- *  key is resolved by pi-ai itself from the environment per request (the
- *  keys seam reflects file-saved keys into env), so the engine never
- *  hardcodes OpenRouter's. */
+ *  2026-09-20): provider-aware catalog lookup + thinking clamp. Pi-ai
+ *  resolves stored credentials or ambient keys per request. */
 export function piEngineForSpec(spec: ResolvedModelSpec): PiEngine {
 	const models: Models = piModels();
 	const model = models.getModel(spec.provider, spec.id);
@@ -108,6 +116,7 @@ export function piEngineForSpec(spec: ResolvedModelSpec): PiEngine {
 	return {
 		model,
 		level,
+		subscription: models.getProvider(spec.provider)?.auth.oauth?.isSubscription === true && credentialIsOAuth?.(spec.provider) === true,
 		// bound streamSimple: the agent loop forwards state.thinkingLevel as
 		// `reasoning` (undefined = off on pi-ai's scale); the clamp above keeps
 		// the pin honest even when config or settings drift off the map.
