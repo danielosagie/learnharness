@@ -76,8 +76,8 @@ export function ChatGPTRow({ events = true }: { events?: boolean }) {
 			{events && mounted && <ChatGPTEvents refresh={() => { void refresh(); }} />}
 			<div className="flex items-center justify-between gap-3">
 				<div>
-					<p className="font-ui text-xs text-foreground">ChatGPT</p>
-					<p className="text-xs text-muted-foreground">Use your ChatGPT Plus or Pro plan for OpenAI models — no API key.</p>
+					<p className="font-ui text-xs text-foreground">ChatGPT / Codex</p>
+					<p className="text-xs text-muted-foreground">The plan Codex runs on (Plus or Pro) — no API key.</p>
 				</div>
 				{status.state === "signed_in" ? (
 					<div className="flex shrink-0 items-center gap-2 text-xs"><span>Signed in · ChatGPT subscription</span><button type="button" disabled={busy} onClick={() => void action("logout")} className="underline">Sign out</button></div>

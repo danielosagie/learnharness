@@ -70,6 +70,11 @@ const nextConfig: NextConfig = {
 			// per-platform-binary story as the canvas above (one per build).
 			"node_modules/@resvg/resvg-js-*/**/*",
 			"node_modules/@earendil-works/pi-ai/dist/providers/data/**/*",
+			// pi-ai loads its OAuth sign-in flows through a variable import specifier
+			// (auth/oauth/load.js) so bundlers cannot follow it — the tracer cannot
+			// either: 0.3.4 shipped 168 of pi-ai's 200 dist .js files and "Sign in
+			// with ChatGPT" died on ERR_MODULE_NOT_FOUND. Ship every .js (1.5 MB).
+			"node_modules/@earendil-works/pi-ai/dist/**/*.js",
 			"node_modules/@earendil-works/pi-agent-core/dist/**/*.json",
 		],
 	},

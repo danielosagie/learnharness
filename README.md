@@ -60,7 +60,7 @@ Handy must use a paste method (the default clipboard paste works). Its **Direct 
 
 ## Your keys, your data
 
-- **Your keys and models.** No LearnHarness subscription or markup. Add provider API keys, or use a subscription you already have: sign in with ChatGPT Plus or Pro in Settings → Keys for OpenAI models, or connect Claude Code for Claude models. Subscription turns keep token counts and show $0 in the cost meter; API key turns use provider prices.
+- **Your keys and models.** No LearnHarness subscription or markup. Add provider API keys, or use a subscription you already have: sign in with ChatGPT Plus or Pro (the plan Codex uses) in Settings → Keys for OpenAI models, or connect Claude Code for Claude models. Subscription turns keep token counts and show $0 in the cost meter; API key turns use provider prices.
 - **Claude Code subscription.** Install and sign in to Claude Code, then choose a Claude model in any model slot. LearnHarness invokes your unmodified local `claude` binary; it never reads or intermediates your Claude login tokens.
 - **Local storage.** Your chats, graph, settings, API keys, and ChatGPT sign-in credential live on your machine. Learning records are plain files you can inspect. API keys remain in `auth.json`; the subscription credential is in a separate mode-0600 `oauth.json` beside it.
 - **External services.** Models run through your configured providers. Model requests send the context needed for the task; web research and Deepgram dictation also contact external services. Handy dictation runs locally. Local storage does not mean offline processing for other features.

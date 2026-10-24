@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 const source = fs.readFileSync(new URL("../scripts/build-server.mjs", import.meta.url), "utf8");
 const STANDALONE = path.join(".next", "standalone");
 const PROMPT = path.join("src", "agent", "system-prompt.md");
+const OAUTH_FLOW = path.join("node_modules", "@earendil-works", "pi-ai", "dist", "auth", "oauth", "openai-chatgpt.js");
 
 function withPayload(test: (fixture: {
 	root: string;
@@ -28,6 +29,7 @@ function withPayload(test: (fixture: {
 		write(path.join(".next", "static", "runtime.js"));
 		write(path.join("public", "asset.txt"));
 		write(path.join(STANDALONE, PROMPT));
+		write(path.join(STANDALONE, OAUTH_FLOW));
 		write(path.join(STANDALONE, "src", "agent", "prompts", "teacher", "20-teaching.md"));
 		test({ root, write, run: () => spawnSync(process.execPath, [path.join(root, "scripts", "build-server.mjs")], {
 			cwd: root, encoding: "utf8", timeout: 10_000,
@@ -92,7 +94,16 @@ describe("desktop standalone payload", () => {
 			fs.rmSync(path.join(root, STANDALONE, PROMPT));
 			const result = run();
 			assert.equal(result.status, 1);
-			assert.match(String(result.stderr), /prompt asset missing/);
+			assert.match(String(result.stderr), /runtime asset missing/);
+		});
+	});
+
+	it("refuses a payload without pi-ai's variable-imported OAuth flow", () => {
+		withPayload(({ root, run }) => {
+			fs.rmSync(path.join(root, STANDALONE, OAUTH_FLOW));
+			const result = run();
+			assert.equal(result.status, 1);
+			assert.match(String(result.stderr), /runtime asset missing.*outputFileTracingIncludes.*openai-chatgpt\.js/);
 		});
 	});
 });
