@@ -1,0 +1,247 @@
+{
+  "package": "py-fsrs 6.3.2",
+  "defaultParameters": [
+    0.212,
+    1.2931,
+    2.3065,
+    8.2956,
+    6.4133,
+    0.8334,
+    3.0194,
+    0.001,
+    1.8722,
+    0.1666,
+    0.796,
+    1.4835,
+    0.0614,
+    0.2629,
+    1.6483,
+    0.6014,
+    1.8729,
+    0.5425,
+    0.0912,
+    0.0658,
+    0.1542
+  ],
+  "vectors": [
+    {
+      "previous": null,
+      "rating": "Again",
+      "elapsedDays": 0,
+      "stability": 0.212,
+      "difficulty": 6.4133
+    },
+    {
+      "previous": null,
+      "rating": "Hard",
+      "elapsedDays": 0,
+      "stability": 1.2931,
+      "difficulty": 5.112170705601056
+    },
+    {
+      "previous": null,
+      "rating": "Good",
+      "elapsedDays": 0,
+      "stability": 2.3065,
+      "difficulty": 2.118103970459016
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Again",
+      "elapsedDays": 1,
+      "retrievability": 0.9468474993825461,
+      "stability": 0.5411993797408932,
+      "difficulty": 8.379332002056836
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Hard",
+      "elapsedDays": 1,
+      "retrievability": 0.9468474993825461,
+      "stability": 4.3026336501392075,
+      "difficulty": 6.741873035676838
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Good",
+      "elapsedDays": 1,
+      "retrievability": 0.9468474993825461,
+      "stability": 5.6256447458250864,
+      "difficulty": 5.104414069296839
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Again",
+      "elapsedDays": 9,
+      "retrievability": 0.7845130365557722,
+      "stability": 0.7072354556314833,
+      "difficulty": 8.379332002056836
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Hard",
+      "elapsedDays": 9,
+      "retrievability": 0.7845130365557722,
+      "stability": 10.949135155496332,
+      "difficulty": 6.741873035676838
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Good",
+      "elapsedDays": 9,
+      "retrievability": 0.7845130365557722,
+      "stability": 16.67735991934874,
+      "difficulty": 5.104414069296839
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Again",
+      "elapsedDays": 31,
+      "retrievability": 0.6644002845701852,
+      "stability": 0.8620777763607138,
+      "difficulty": 8.379332002056836
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Hard",
+      "elapsedDays": 31,
+      "retrievability": 0.6644002845701852,
+      "stability": 16.450311535856,
+      "difficulty": 6.741873035676838
+    },
+    {
+      "previous": {
+        "stability": 2.3065,
+        "difficulty": 5.1143
+      },
+      "rating": "Good",
+      "elapsedDays": 31,
+      "retrievability": 0.6644002845701852,
+      "stability": 25.82464355812437,
+      "difficulty": 5.104414069296839
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Again",
+      "elapsedDays": 1,
+      "retrievability": 0.9898954331405423,
+      "stability": 1.4058500691468427,
+      "difficulty": 9.064887409296839
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Hard",
+      "elapsedDays": 1,
+      "retrievability": 0.9898954331405423,
+      "stability": 15.508130623565732,
+      "difficulty": 8.126457889296837
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Good",
+      "elapsedDays": 1,
+      "retrievability": 0.9898954331405423,
+      "stability": 16.242585007591835,
+      "difficulty": 7.1880283692968385
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Again",
+      "elapsedDays": 9,
+      "retrievability": 0.9289547279493924,
+      "stability": 1.5544017044544898,
+      "difficulty": 9.064887409296839
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Hard",
+      "elapsedDays": 9,
+      "retrievability": 0.9289547279493924,
+      "stability": 22.383598519925958,
+      "difficulty": 8.126457889296837
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Good",
+      "elapsedDays": 9,
+      "retrievability": 0.9289547279493924,
+      "stability": 27.675022480754837,
+      "difficulty": 7.1880283692968385
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Again",
+      "elapsedDays": 31,
+      "retrievability": 0.8394721023142925,
+      "stability": 1.801437446239855,
+      "difficulty": 9.064887409296839
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Hard",
+      "elapsedDays": 31,
+      "retrievability": 0.8394721023142925,
+      "stability": 33.103314484651705,
+      "difficulty": 8.126457889296837
+    },
+    {
+      "previous": {
+        "stability": 14.4,
+        "difficulty": 7.2
+      },
+      "rating": "Good",
+      "elapsedDays": 31,
+      "retrievability": 0.8394721023142925,
+      "stability": 45.49962501604872,
+      "difficulty": 7.1880283692968385
+    }
+  ]
+}

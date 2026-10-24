@@ -58,13 +58,16 @@ export interface PracticeToolContext {
  *  this closure — the intra-turn truth the record cannot hold yet. */
 export interface PracticeGate {
 	problemActive: boolean;
+	targets: string[];
 }
 
 /** Seed the turn's gate from the record (result-aware activeProblemOf —
  *  only a cleanly-posed problem counts). */
 export function createPracticeGate(ctx: PracticeToolContext): PracticeGate {
 	const record = ctx.chatStore.getChat(ctx.chatId);
-	return { problemActive: record ? activeProblemOf(record.messages) !== null : false };
+	const active = record ? activeProblemOf(record.messages) : null;
+	const input = active?.input as { target?: unknown } | undefined;
+	return { problemActive: active !== null, targets: Array.isArray(input?.target) ? input.target.filter((id): id is string => typeof id === "string") : [] };
 }
 
 // ─── problem: the pose ───────────────────────────────────────────────────────
@@ -82,7 +85,7 @@ export const problemInputObject = Type.Object({
 		Type.Array(Type.String(), {
 			minItems: 1,
 			description:
-				"The proposition id(s) this problem exercises, from the session context's [id] list — include when " +
+				"Every proposition the committed solution must bring to mind at a decision point, using known graph ids (picked ids appear in the session context's [id] list) — omit propositions carried along an already-active chain. Include when " +
 				"the material is in the map; OMIT entirely when it is not (a topic session poses untagged problems). " +
 				"Names are normalized to ids at the seam; an unknown proposition is rejected.",
 		}),
@@ -155,6 +158,7 @@ export function problemTool(
 				}
 			}
 			gate.problemActive = true;
+			gate.targets = input.target ?? [];
 			return problemResult();
 		},
 	};
@@ -192,6 +196,7 @@ export const concludeInputObject = Type.Object({
 		{ description: "REQUIRED — the miss classification: cue, discrimination, execution, careless, or structural — or null = no miss (bare, no quotes)." },
 	),
 	retest: Type.Boolean({ description: "REQUIRED — true marks the problem for a fresh-surface retest before the session ends." }),
+	missed: Type.Optional(Type.Array(Type.String(), { description: "Target ids that failed in this problem. Omit to count a failed multi-target problem as a lapse on every target." })),
 });
 
 export type ConcludeInput = Static<typeof concludeInputObject>;
@@ -209,11 +214,15 @@ export function concludeTool(gate: PracticeGate): AgentTool<typeof concludeInput
 		parameters: concludeInputObject,
 		prepareArguments: (args: unknown) => healEncodedArguments(args, concludeInputObject) as never,
 		executionMode: "sequential",
-		execute: async (_toolCallId, _input) => {
+		execute: async (_toolCallId, input) => {
 			if (!gate.problemActive) {
 				return invalidInputResult("conclude", ["no active problem to conclude — pose one first"]);
 			}
+			if (input.missed?.some((id) => !gate.targets.includes(id))) {
+				return invalidInputResult("conclude", ["missed must contain only the active problem's target ids"]);
+			}
 			gate.problemActive = false;
+			gate.targets = [];
 			return concludeResult();
 		},
 	};

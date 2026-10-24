@@ -726,6 +726,15 @@ export function AgentSection({
 				})}
 			</SettingsGroup>
 
+			<SettingsGroup label="Practice" testid="group-practice">
+				<SettingsRow label="Desired retention" hint="Review when recall falls below this level">
+					<label className="flex items-center gap-2 text-xs tabular-nums">
+						<input type="range" min="0.7" max="0.99" step="0.01" value={agent?.desiredRetention ?? 0.9} onChange={(e) => onSectionChange({ ...agent, desiredRetention: Number(e.target.value) })} aria-label="Desired retention" />
+						{Math.round((agent?.desiredRetention ?? 0.9) * 100)}%
+					</label>
+				</SettingsRow>
+			</SettingsGroup>
+
 			<SettingsGroup label="Tools" testid="group-tools">
 				{/* The prober's graph tools (wave 7, owner ruling 2026-09-23):
 				    FIRST row of the group — its subject is the map, its

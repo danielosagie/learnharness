@@ -138,6 +138,12 @@ export function parseAgentSettingsBody(body: unknown): SettingsBodyResult<AgentS
 	const raw = asRecord(body);
 	if (!raw) return { ok: false, error: "Invalid JSON body" };
 	const settings: AgentSettings = {};
+	if (raw.desiredRetention !== undefined) {
+		if (typeof raw.desiredRetention !== "number" || !Number.isFinite(raw.desiredRetention) || raw.desiredRetention < 0.7 || raw.desiredRetention > 0.99) {
+			return { ok: false, error: "desiredRetention must be between 0.7 and 0.99" };
+		}
+		settings.desiredRetention = raw.desiredRetention;
+	}
 	if (raw.models !== undefined) {
 		const models = asRecord(raw.models);
 		if (!models) return { ok: false, error: "models must be an object" };
