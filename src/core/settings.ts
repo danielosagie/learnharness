@@ -362,6 +362,7 @@ export interface CompactionSettings {
  *  preserved verbatim by the sanitizer (forward-compat with newer records). */
 export interface UserSettings {
 	version: number;
+	phone?: PhoneSettings;
 	dictation?: DictationSettings;
 	general?: GeneralSettings;
 	agent?: AgentSettings;
@@ -371,6 +372,10 @@ export interface UserSettings {
 	graph?: GraphSettings;
 	compaction?: CompactionSettings;
 	[key: string]: unknown;
+}
+
+export interface PhoneSettings {
+	enabled?: boolean;
 }
 
 export type DictationEngine = "handy" | "deepgram";
@@ -632,6 +637,10 @@ export function sanitizeUserSettings(raw: unknown): UserSettings | null {
 	const out: UserSettings = {
 		version: typeof r.version === "number" && Number.isInteger(r.version) && r.version >= 1 ? r.version : CURRENT_SETTINGS_VERSION,
 	};
+	if (r.phone !== null && typeof r.phone === "object" && !Array.isArray(r.phone)) {
+		const enabled = boolOrDrop((r.phone as Record<string, unknown>).enabled);
+		out.phone = enabled === undefined ? {} : { enabled };
+	}
 	if (r.dictation !== null && typeof r.dictation === "object" && !Array.isArray(r.dictation)) {
 		const engine = (r.dictation as Record<string, unknown>).engine;
 		out.dictation = engine === "handy" || engine === "deepgram" ? { engine } : {};
@@ -661,7 +670,7 @@ export function sanitizeUserSettings(raw: unknown): UserSettings | null {
 	// 2026-09-28) — a fossil copy on disk must never resurrect through
 	// reads (and any later write flushes it from the file for good).
 	for (const [key, value] of Object.entries(r)) {
-		if (key === "chat" || key === "dictation") continue;
+		if (key === "chat" || key === "dictation" || key === "phone") continue;
 		if (!(key in out)) out[key] = value;
 	}
 	return out;

@@ -41,6 +41,7 @@ import {
 	validateChatSettings,
 	validateModelsSettings,
 	writeSettingsRecord,
+	syncPhoneServer,
 	type SettingsBodyResult,
 } from "@/src/server";
 
@@ -51,6 +52,7 @@ type AnySectionParser = (body: unknown) => SettingsBodyResult<unknown>;
 
 export async function PUT(request: Request, ctx: { params: Promise<{ section: string }> }) {
 	const { section } = await ctx.params;
+	if (section === "phone" && request.headers.has("x-lh-phone")) return Response.json({ message: "Forbidden" }, { status: 403 });
 	const parser = (SETTINGS_SECTIONS as Record<string, AnySectionParser>)[section];
 	if (!parser) {
 		return Response.json(
@@ -127,5 +129,6 @@ export async function PUT(request: Request, ctx: { params: Promise<{ section: st
 	const record = readSettingsRecord() ?? { version: 1 };
 	const next = { ...record, [section]: sectionOut };
 	writeSettingsRecord(next);
+	if (section === "phone") await syncPhoneServer();
 	return Response.json({ settings: next });
 }

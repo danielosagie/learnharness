@@ -50,6 +50,7 @@ export interface ServerEvents {
 	"compaction-changed": { chatId: string; running: boolean };
 	/** OAuth login or credential state changed; consumers refetch status and models. */
 	"auth-changed": Record<string, never>;
+	"phone-changed": Record<string, never>;
 }
 
 export type ServerEventType = keyof ServerEvents;
@@ -66,6 +67,7 @@ export const SERVER_EVENT_TYPES = [
 	"record-changed",
 	"compaction-changed",
 	"auth-changed",
+	"phone-changed",
 ] as const satisfies readonly ServerEventType[];
 
 /** One notification: the type discriminates the payload. */

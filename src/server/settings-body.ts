@@ -22,6 +22,7 @@ import type {
 	GeneralSettings,
 	GraphSettings,
 	ModelsSettings,
+	PhoneSettings,
 	RoleModelOverride,
 } from "../core/settings.ts";
 import { BACKGROUND_MODEL_ROLES, COMPACTION_THRESHOLD_FLOOR, EXTRACTION_CHUNK_TOKENS_FLOOR, MODEL_SLOTS } from "../core/settings.ts";
@@ -88,6 +89,13 @@ export function parseGeneralSettingsBody(body: unknown): SettingsBodyResult<Gene
 		settings.autoUpdate = raw.autoUpdate;
 	}
 	return { ok: true, settings };
+}
+
+export function parsePhoneSettingsBody(body: unknown): SettingsBodyResult<PhoneSettings> {
+	const raw = asRecord(body);
+	if (!raw) return { ok: false, error: "Invalid JSON body" };
+	if (raw.enabled !== undefined && typeof raw.enabled !== "boolean") return { ok: false, error: "enabled must be a boolean" };
+	return { ok: true, settings: raw.enabled === undefined ? {} : { enabled: raw.enabled } };
 }
 
 export function parseDictationSettingsBody(body: unknown): SettingsBodyResult<DictationSettings> {
@@ -394,6 +402,7 @@ export function parseCompactionSettingsBody(body: unknown): SettingsBodyResult<C
 /** The section→parser map for PUT /api/settings/[section] (the route also
  *  carries the special prompts sub-resource). */
 export const SETTINGS_SECTIONS = {
+	phone: parsePhoneSettingsBody,
 	general: parseGeneralSettingsBody,
 	dictation: parseDictationSettingsBody,
 	chat: parseSettingsBody,
