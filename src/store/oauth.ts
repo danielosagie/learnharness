@@ -93,10 +93,12 @@ export function hasOAuthCredential(providerId: string): boolean {
 	return readData().credentials[providerId]?.type === "oauth";
 }
 
-export function oauthDeviceId(): string {
-	const data = readData();
-	if (data.deviceId) return data.deviceId;
-	data.deviceId = randomUUID();
-	writeData(data);
-	return data.deviceId;
+export function oauthDeviceId(): Promise<string> {
+	return locked(async () => {
+		const data = readData();
+		if (data.deviceId) return data.deviceId;
+		data.deviceId = randomUUID();
+		writeData(data);
+		return data.deviceId;
+	});
 }

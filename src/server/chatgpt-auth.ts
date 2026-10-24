@@ -47,7 +47,7 @@ export async function startChatGPTLogin(models: Pick<Models, "login"> = piModels
 	const flow: Flow = { controller, url, done: Promise.resolve() };
 	state.flow = flow;
 	changed();
-	flow.done = models.login("openai", "oauth", {
+	flow.done = oauthDeviceId().then((deviceId) => models.login("openai", "oauth", {
 		signal: controller.signal,
 		notify(event) {
 			if (event.type === "auth_url") resolveUrl(event.url);
@@ -61,7 +61,7 @@ export async function startChatGPTLogin(models: Pick<Models, "login"> = piModels
 				if (prompt.signal?.aborted) abort();
 			});
 		},
-	}, { getDeviceId: oauthDeviceId, agentName: "LearnHarness" })
+	}, { getDeviceId: () => deviceId, agentName: "LearnHarness" }))
 		.then(() => {
 			if (state.flow === flow) { state.flow = undefined; changed(); }
 		})
@@ -71,7 +71,7 @@ export async function startChatGPTLogin(models: Pick<Models, "login"> = piModels
 			state.flow = undefined;
 			if (!controller.signal.aborted) state.error = error instanceof Error && error.message.includes("Port 1455")
 				? "Port 1455 is in use. Close the other sign-in and try again."
-				: "Sign-in failed. Try again.";
+				: `Sign-in failed: ${error instanceof Error ? error.message.trim().slice(0, 200) : String(error).trim().slice(0, 200)}`;
 			changed();
 		});
 	return { url: await url };
