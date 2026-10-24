@@ -18,6 +18,7 @@ import type {
 	AppearanceSettings,
 	BackgroundModelRole,
 	CompactionSettings,
+	DictationSettings,
 	GeneralSettings,
 	GraphSettings,
 	ModelsSettings,
@@ -87,6 +88,15 @@ export function parseGeneralSettingsBody(body: unknown): SettingsBodyResult<Gene
 		settings.autoUpdate = raw.autoUpdate;
 	}
 	return { ok: true, settings };
+}
+
+export function parseDictationSettingsBody(body: unknown): SettingsBodyResult<DictationSettings> {
+	const raw = asRecord(body);
+	if (!raw) return { ok: false, error: "Invalid JSON body" };
+	if (raw.engine !== undefined && raw.engine !== "handy" && raw.engine !== "deepgram") {
+		return { ok: false, error: "engine must be handy or deepgram" };
+	}
+	return { ok: true, settings: raw.engine === undefined ? {} : { engine: raw.engine } };
 }
 
 /** agent.models: only the six known background roles; each override's
@@ -379,6 +389,7 @@ export function parseCompactionSettingsBody(body: unknown): SettingsBodyResult<C
  *  carries the special prompts sub-resource). */
 export const SETTINGS_SECTIONS = {
 	general: parseGeneralSettingsBody,
+	dictation: parseDictationSettingsBody,
 	chat: parseSettingsBody,
 	agent: parseAgentSettingsBody,
 	appearance: parseAppearanceSettingsBody,

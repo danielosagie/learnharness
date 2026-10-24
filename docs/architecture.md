@@ -189,6 +189,7 @@ flowchart LR
         LLM["LLM engines — pi-ai/OpenRouter via piEngineFor"]
         HEAD["headless Chrome — demo verify · SVG render"]
         DEEP["Deepgram STT — token-minting route, browser-side WebSocket"]
+        HANDY["Handy STT — host command route, document paste routing"]
         WEB["web tools — Google CSE + Readability/Jina (researcher)"]
     end
 
@@ -205,6 +206,7 @@ flowchart LR
     SESS --> HEAD
     SESS --> WEB
     BROWSER --> DEEP
+    BROWSER --> HANDY
 ```
 
 ---
@@ -501,7 +503,7 @@ The bus itself is a `globalThis`-backed listener set (the Next per-entry-module 
 
 - **Extraction-coverage ×2** (session menu block + ring) — bounded, run-scoped 2s reads: the ring drains **per fold**, and the events channel is per **phase**; that granularity gap is accepted by design (owner, 2026-10-02).
 - **The 409-retry poll** (`session-core.ts`, 500ms→5s ramp) — a racing client's bounded backoff while a turn it tried to start is already running; not standing.
-- **Dock clock ticker** (1s `setNow`) and **dictation audio meter** — local rendering, no network.
+- **Dock clock ticker** (1s `setNow`) and **Deepgram dictation audio meter** — local rendering, no network.
 - **Mount fast-paths kept** — `initiallyInFlight` (attach on render-time snapshot), the mount-time `needsContinuation` check, and the `lh:chat-renamed`/`lh:turn-state` **local window broadcasts** (instant same-tab patching; the channel is for cross-window and server-initiated truth).
 
 ---
@@ -537,6 +539,7 @@ Every place the architecture is designed to be cut — the "one file" a future c
 | Sub-agent verification | `sub-agents/headless.ts` (`headlessOverride`) | demo/SVG verification, no Chrome |
 | Data location (Electron) | `LH_DATA_DIR` env (`config.ts` PATHS) | where data/ lives, nothing else |
 | Desktop host | `electron/main.cjs` | launcher/security shell only |
+| Dictation | `components/dictation-paste.tsx` (focused-field routing) + `components/dictation.tsx` (engine and target) + `src/server/handy.ts` (host command adapter) | Handy paste/CLI or Deepgram streaming; the primary target and `joinDictation` define shared append behavior |
 
 ---
 

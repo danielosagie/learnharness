@@ -48,15 +48,21 @@ Future teaching sessions can read the graph instead of starting from scratch. Pr
 - **Windows (x64):** run the installer. It is currently unsigned; Windows may show an “unknown publisher” or SmartScreen warning.
 - **Linux (x64):** make the AppImage executable and open it, or install the Debian/Ubuntu `.deb`.
 
-Add your provider API key and choose your models, then start a session with what you want to understand. LearnHarness supports 30+ provider options, including OpenAI, Anthropic, Google, DeepSeek, and OpenRouter. Optional dictation and web search use separate service keys.
+Add your provider API key and choose your models, then start a session with what you want to understand. LearnHarness supports 30+ provider options, including OpenAI, Anthropic, Google, DeepSeek, and OpenRouter. Web search and Deepgram dictation use separate service keys; Handy dictation needs none.
 
 All three platforms support in-app updates.
+
+## Dictation with Handy
+
+[Handy](https://handy.computer) is a free, local speech-to-text option. Install and open Handy, then choose **Handy (on-device)** under Settings → Keys → Dictation engine. With no Deepgram key, LearnHarness selects Handy automatically when it is installed. Use Handy's global hotkey or LearnHarness's mic button; spoken text goes to the current composer, answer, or thinking field. The mic button starts recording, and a second click stops it; Esc cancels.
+
+Handy must use a paste method (the default clipboard paste works). Its **Direct Input** and **None** methods are not supported by LearnHarness's paste routing. Handy's **Don't modify clipboard** option restores your clipboard after the paste.
 
 ## Your keys, your data
 
 - **Your keys and models.** No LearnHarness subscription or markup. You pay your providers for usage; a live cost meter shows model costs.
 - **Local storage.** Your chats, graph, settings, and API keys live on your machine. Learning records are plain files you can inspect.
-- **External services.** Models run through your configured providers. Model requests send the context needed for the task; web research and dictation also contact external services. Local storage does not mean offline processing.
+- **External services.** Models run through your configured providers. Model requests send the context needed for the task; web research and Deepgram dictation also contact external services. Handy dictation runs locally. Local storage does not mean offline processing for other features.
 - **Inspectable behavior.** System prompts are visible and editable. The app is open source under the AGPL-3.0 license.
 
 ## Development and support

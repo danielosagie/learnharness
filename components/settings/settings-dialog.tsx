@@ -33,6 +33,8 @@ import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
 import {
 	CURRENT_SETTINGS_VERSION,
+	resolveDictationEngine,
+	type DictationEngine,
 	type AgentSettings,
 	type AppearanceSettings,
 	type CompactionSettings,
@@ -49,6 +51,36 @@ import { KeysSection } from "./keys-section.tsx";
 import { Hint } from "@/components/ui/hint";
 import { AppearanceSection, GraphSection } from "./appearance-section.tsx";
 import { KeyboardSection } from "./keyboard-section.tsx";
+
+function DictationEngineControl({ stored, onChange }: { stored?: DictationEngine; onChange: (engine: DictationEngine) => void }) {
+	const [facts, setFacts] = useState<{ key: boolean; installed: boolean } | null>(null);
+	const selected = stored ?? (facts ? resolveDictationEngine(undefined, facts.key, facts.installed) : "");
+	useEffect(() => {
+		let live = true;
+		void Promise.all([
+			fetch("/api/keys").then((r) => r.json()) as Promise<{ keys: Array<{ id: string; present: boolean }> }>,
+			fetch("/api/stt/handy").then((r) => r.json()) as Promise<{ installed: boolean }>,
+		]).then(([keys, handy]) => {
+			if (live) setFacts({ key: keys.keys.some((k) => k.id === "DEEPGRAM_API_KEY" && k.present), installed: handy.installed });
+		}).catch(() => {});
+		return () => { live = false; };
+	}, []);
+	return (
+		<SettingsRow label="Dictation engine" testid="row-dictation-engine">
+			<select
+				aria-label="Dictation engine"
+				value={selected}
+				disabled={!selected}
+				onChange={(event) => onChange(event.target.value as DictationEngine)}
+				className="rounded border border-border bg-background px-2 py-1 text-xs"
+			>
+				<option value="" disabled>Detecting…</option>
+				<option value="handy">Handy (on-device)</option>
+				<option value="deepgram">Deepgram (cloud)</option>
+			</select>
+		</SettingsRow>
+	);
+}
 
 /** Owner (2026-09-20): hints earn their place — mechanics-explaining
  *  prose is out; only the keyboard note stays (storage location is a
@@ -226,7 +258,7 @@ export function SettingsDialogBody({
 	 *  schema mistake caught by the validation surface). */
 	const write = useCallback(
 		async (
-			section: "general" | "agent" | "models" | "appearance" | "graph" | "compaction",
+			section: "general" | "dictation" | "agent" | "models" | "appearance" | "graph" | "compaction",
 			body: object,
 		) => {
 			setError(null);
@@ -377,7 +409,12 @@ export function SettingsDialogBody({
 							)}
 							{active === "keys" && (
 								<SettingsSection title="Keys" testid="section-keys">
-									<KeysSection initialRow={initialRow ?? undefined} />
+									<KeysSection initialRow={initialRow ?? undefined} dictationControl={
+										<DictationEngineControl
+											stored={record.dictation?.engine}
+											onChange={(engine) => void write("dictation", { engine })}
+										/>
+									} />
 								</SettingsSection>
 							)}
 							{active === "agent" && (

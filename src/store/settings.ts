@@ -14,7 +14,8 @@
  * Everything off disk is sanitized (core/settings.ts) before it reaches a
  * caller; everything written was already validated by the routes
  * (settings-body.ts) and is sanitized here again — the file can never hold
- * a value that would silently shift a knob.
+ * a value that would silently shift a knob. Dictation's engine choice is a
+ * non-secret delta here; its host-dependent default is resolved at read time.
  */
 
 import fs from "node:fs";
