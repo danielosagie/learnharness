@@ -17,6 +17,7 @@ const { keyStatusLine } = await import("../components/settings/keys-section.tsx"
 const { setupStage } = await import("../components/setup-dialog.tsx");
 const { callCost, turnCost, jobCost } = await import("../src/core/prices.ts");
 const { graphCostSummary } = await import("../src/core/cost-summary.ts");
+const { persistTurn } = await import("../src/server/turn-service.ts");
 const { piModels, piEngineForSpec } = await import("../src/agent/models.ts");
 const { modelCatalog } = await import("../src/server/model-catalog.ts");
 const startRoute = await import("../app/api/auth/chatgpt/start/route.ts");
@@ -140,5 +141,24 @@ describe("subscription accounting", () => {
 		assert.equal(graph.stages.extraction.tokens.inputTokens, 1000);
 		assert.equal(step.inputTokens, 1000);
 		assert.ok((callCost({ ...step, billing: undefined }, "openai:gpt-6-sol") ?? 0) > 0);
+	});
+
+	it("stores zero native pi cost while preserving tokens and the original message", () => {
+		const message = {
+			id: "native", role: "assistant", content: [{ type: "text", text: "ok" }],
+			api: "openai-responses", provider: "openai", model: "gpt-6-sol", stopReason: "stop", timestamp: 1,
+			usage: { input: 1000, output: 500, cacheRead: 0, cacheWrite: 0, totalTokens: 1500,
+				cost: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, total: 2 } },
+		};
+		let saved: unknown[] = [];
+		const store = {
+			getChat: () => ({ id: "chat", title: "Test", createdAt: "", updatedAt: "", messages: [] }),
+			saveMessages: (_id: string, messages: unknown[]) => { saved = messages; },
+		} as unknown as Parameters<typeof persistTurn>[0];
+		const stamped = persistTurn(store, "chat", 0, [message as never], false, "subscription");
+		assert.equal((stamped[0] as typeof message).usage.cost.total, 0);
+		assert.equal((stamped[0] as typeof message).usage.input, 1000);
+		assert.equal((saved[0] as typeof message).usage.cost.total, 0);
+		assert.equal(message.usage.cost.total, 2);
 	});
 });
