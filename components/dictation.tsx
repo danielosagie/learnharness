@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2Icon, MicIcon } from "lucide-react";
 import { useSettingsDialog } from "@/components/settings/settings-dialog";
 import { Hint } from "@/components/ui/hint";
+import { resolveDictationEngine, type DictationEngine, type UserSettings } from "@/src/core";
+import { useSettingsSaved } from "@/components/settings-signal";
+import { createHandyController } from "./handy-control";
+import { appendToDictationTarget, claimPrimaryDictationTarget, releaseComposerDictationTarget, releasePrimaryDictationTarget, setComposerDictationTarget } from "./dictation-paste";
 
 /**
  * Voice dictation — the cloud engine (STT wave 1, 2026-09-17).
@@ -198,11 +202,10 @@ export function rmsToMeter(rms: number): number {
  * The primary-input registry: at most ONE non-composer input can claim the
  * dictation target while mounted — the pending question's answer/thinking
  * field (question-dock.tsx). The page's `append` (the composer) is the
- * fallback when nobody claims. Module-level by design: the claimant is a
- * sibling subtree far from the hook's owner, and there is exactly one
- * window, one pending question, one target at a time.
+ * fallback when nobody claims. The registry in dictation-paste.tsx is
+ * module-level because the claimant is a sibling subtree far from the
+ * hook's owner; one window has one primary target at a time.
  */
-let questionTarget: ((text: string) => void) | null = null;
 
 /* Is a dictation run live on this page? The Esc chain (keyboard wave A,
  * components/keyboard-shortcuts.tsx) needs a SYNCHRONOUS answer — the
@@ -238,9 +241,9 @@ export function joinDictation(current: string, final: string): string {
 export function useDictationTarget(append: (text: string) => void, claimed: boolean) {
 	useEffect(() => {
 		if (!claimed) return;
-		questionTarget = append;
+		claimPrimaryDictationTarget(append);
 		return () => {
-			if (questionTarget === append) questionTarget = null;
+			releasePrimaryDictationTarget(append);
 		};
 	}, [append, claimed]);
 }
@@ -249,6 +252,9 @@ export type DictationPhase = "idle" | "connecting" | "recording" | "stopping";
 
 export type Dictation = {
 	phase: DictationPhase;
+	engine?: DictationEngine;
+	ready?: boolean;
+	hint?: string;
 	/** Terminal-state explanation, shown inside the wide button (cleared on the next start). */
 	error: string | null;
 	/** Latest observed RMS, 0..1 — sampled by the meter's own tick, never reset. */
@@ -287,12 +293,54 @@ export type Dictation = {
 export function useDictation({ append }: { append: (text: string) => void }): Dictation {
 	const [phase, setPhase] = useState<DictationPhase>("idle");
 	const [error, setError] = useState<string | null>(null);
+	const [engine, setEngine] = useState<DictationEngine | null>(null);
+	const [showHandyHint, setShowHandyHint] = useState(false);
+	const [handyPhase, setHandyPhase] = useState<DictationPhase>("idle");
+	const [handyError, setHandyError] = useState<string | null>(null);
+	const handyRef = useRef<ReturnType<typeof createHandyController> | null>(null);
+	if (!handyRef.current) {
+		handyRef.current = createHandyController(async (command) => {
+			const response = await fetch("/api/stt/handy", {
+				method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command }),
+			});
+			return response.json() as Promise<{ ok: boolean; error?: string }>;
+		}, (next, message) => {
+			dictationActiveFlag = next !== "idle";
+			setHandyPhase(next);
+			setHandyError(message);
+		});
+	}
+	const handy = handyRef.current;
+	const reloadEngine = useCallback(() => {
+		void Promise.all([
+			fetch("/api/settings").then((r) => r.json()) as Promise<{ settings: UserSettings | null }>,
+			fetch("/api/keys").then((r) => r.json()) as Promise<{ keys: Array<{ id: string; present: boolean }> }>,
+			fetch("/api/stt/handy").then((r) => r.json()) as Promise<{ installed: boolean }>,
+		]).then(([settings, keys, status]) => {
+			const hasKey = keys.keys.some((key) => key.id === DEEPGRAM_KEY_ID && key.present);
+			const next = resolveDictationEngine(settings.settings?.dictation, hasKey, status.installed);
+			setEngine(next);
+			setShowHandyHint(next === "deepgram" && !hasKey && !status.installed);
+		}).catch(() => setEngine("deepgram"));
+	}, []);
+	useEffect(() => { reloadEngine(); }, [reloadEngine]);
+	useSettingsSaved((section) => { if (section === "dictation" || section === "keys") reloadEngine(); });
+	useEffect(() => {
+		const onPaste = () => handy.onPaste();
+		window.addEventListener("lh:dictation-paste", onPaste);
+		return () => { window.removeEventListener("lh:dictation-paste", onPaste); handy.dispose(); };
+	}, [handy]);
 	/** Latest RMS from the worklet — the meter samples this (dictate pattern). */
 	const levelRef = useRef(0);
 	/** The page's fallback append — kept fresh per render so a mid-recording
 	 *  retarget (composer↔question) is honored on the very next final. */
 	const appendRef = useRef(append);
 	appendRef.current = append;
+	useEffect(() => {
+		const target = (text: string) => appendRef.current(text);
+		setComposerDictationTarget(target);
+		return () => releaseComposerDictationTarget(target);
+	}, []);
 
 	// Live machinery (non-render values). The MediaStream tracks stop and
 	// the per-run nodes disconnect on teardown; the socket is recreated per
@@ -323,7 +371,7 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 		if (bufferRef.current.length === 0) return;
 		const text = bufferRef.current.join(" ");
 		bufferRef.current = [];
-		(questionTarget ?? appendRef.current)(text);
+		appendToDictationTarget(text);
 	}, []);
 
 	/** Full teardown of one run's machinery. Idempotent; generation-guarded by callers. */
@@ -568,11 +616,11 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 	// Publish finish() for the sibling subtrees (the pending question's
 	// dock) — registered for as long as this page owns the hook.
 	useEffect(() => {
-		dictationFinisher = finish;
+		dictationFinisher = engine === "handy" ? handy.finish : engine === "deepgram" ? finish : null;
 		return () => {
-			if (dictationFinisher === finish) dictationFinisher = null;
+			if (dictationFinisher === finish || dictationFinisher === handy.finish) dictationFinisher = null;
 		};
-	}, [finish]);
+	}, [finish, engine, handy]);
 
 	const toggle = useCallback(() => {
 		if (phase === "idle") void start();
@@ -585,18 +633,34 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 	// page owns ONE hook instance, and only the mounted page's listener is
 	// attached.
 	useEffect(() => {
-		warmTokens.refresh(); // pre-mint at mount (mitigation D) — silent if keyless
-	}, []);
+		if (engine === "deepgram") warmTokens.refresh();
+	}, [engine]);
 	useEffect(() => {
-		window.addEventListener("lh:kbd-toggle-dictation", toggle);
-		return () => window.removeEventListener("lh:kbd-toggle-dictation", toggle);
-	}, [toggle]);
+		if (engine === null) return;
+		const chosen = engine === "handy" ? handy.toggle : toggle;
+		window.addEventListener("lh:kbd-toggle-dictation", chosen);
+		return () => window.removeEventListener("lh:kbd-toggle-dictation", chosen);
+	}, [toggle, engine, handy]);
 	useEffect(() => {
-		window.addEventListener("lh:kbd-cancel-dictation", cancel);
-		return () => window.removeEventListener("lh:kbd-cancel-dictation", cancel);
-	}, [cancel]);
+		if (engine === null) return;
+		const chosen = engine === "handy" ? handy.cancel : cancel;
+		window.addEventListener("lh:kbd-cancel-dictation", chosen);
+		return () => window.removeEventListener("lh:kbd-cancel-dictation", chosen);
+	}, [cancel, engine, handy]);
+	if (engine === "handy") return {
+		engine, phase: handyPhase, error: handyError, levelRef,
+		active: handyPhase !== "idle", toggle: () => { void handy.toggle(); },
+		stop: () => { void handy.toggle(); }, finish: handy.finish, cancel: handy.cancel,
+		clearError: () => setHandyError(null),
+	};
+	if (engine === null) return {
+		phase: "idle", error: null, levelRef, active: false, ready: false,
+		toggle: () => {}, stop: () => {}, finish: () => Promise.resolve(), cancel: () => {}, clearError: () => {},
+	};
 
 	return {
+		engine,
+		hint: showHandyHint ? "Handy is a free local option" : undefined,
 		phase,
 		error,
 		levelRef,
@@ -622,7 +686,7 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
  *             (full text in the tooltip), cleared on the next click.
  */
 export function DictationBar({ dictation }: { dictation: Dictation }) {
-	const { phase, error, levelRef, toggle, active, clearError } = dictation;
+	const { phase, error, levelRef, toggle, active, clearError, engine, hint, ready } = dictation;
 	const { open: openSettings } = useSettingsDialog();
 	/** The keyless click (zero-keys wave, owner dictation trio): the errored
 	 *  idle button deep-links Settings → Keys → the Deepgram row and clears
@@ -673,6 +737,7 @@ export function DictationBar({ dictation }: { dictation: Dictation }) {
 
 	if (!active) {
 		return (
+			<div className="min-w-0 flex-1">
 			<Hint
 				// Errored: the button span truncates the line — the tooltip is its
 				// full reveal (the keyless line KEEPS "Deepgram" — owner overrule:
@@ -684,6 +749,7 @@ export function DictationBar({ dictation }: { dictation: Dictation }) {
 			>
 				<button
 					type="button"
+						disabled={ready === false}
 					onClick={() => {
 						if (keyless) {
 							clearError();
@@ -702,6 +768,19 @@ export function DictationBar({ dictation }: { dictation: Dictation }) {
 					<span className="max-w-full truncate">{error ?? "Dictate"}</span>
 				</button>
 			</Hint>
+			{error === DICTATION_KEYLESS && hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+			</div>
+		);
+	}
+	if (engine === "handy") {
+		return (
+			<div className="flex w-full min-w-0 items-center gap-2" data-testid="dictation-bar">
+			<button type="button" onClick={toggle} disabled={phase === "stopping" || phase === "connecting"}
+				aria-label="Stop dictation" data-testid="dictation-toggle"
+				className="flex h-7 items-center gap-1.5 rounded-md bg-destructive/10 px-2 text-xs text-destructive">
+				<MicIcon className="size-3.5" /> {phase === "stopping" ? "Waiting for Handy" : "Listening in Handy"}
+			</button>
+		</div>
 		);
 	}
 

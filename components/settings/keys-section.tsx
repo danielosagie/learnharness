@@ -23,7 +23,7 @@
  * effect immediately. Plaintext never returns from the store.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AUTH_KEYS, type AuthKeyStatus } from "@/src/core";
 import { SettingsGroup } from "./controls.tsx";
 import { ProviderMenuList } from "./model-menu.tsx";
@@ -320,8 +320,10 @@ export function KeysSection({
 	 *  while mounted too — the settings dialog's while-open retarget
 	 *  pattern. undefined = nothing seeded. */
 	initialRow,
+	dictationControl,
 }: {
 	initialRow?: string;
+	dictationControl?: ReactNode;
 }) {
 	const [statuses, setStatuses] = useState<AuthKeyStatus[] | null>(null);
 	const [providers, setProviders] = useState<ProviderKeyInfo[] | undefined>(undefined);
@@ -449,6 +451,7 @@ export function KeysSection({
 			</SettingsGroup>
 
 			<SettingsGroup label="Tools & services" testid="group-tool-keys">
+				{dictationControl}
 				{toolRows.map((status) => (
 					<KeyTableRow
 						key={status.id}
