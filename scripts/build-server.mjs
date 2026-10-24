@@ -78,14 +78,16 @@ for (const extra of ["dist", path.join("node_modules", "electron")]) {
 	}
 }
 
-// 3) Sanity: the runtime-read prompt assets must be present (the teacher
-//    agent reads them from disk at request time).
+// 3) Sanity: the runtime-read assets must be present — the teacher agent
+//    reads its prompts from disk at request time, and pi-ai imports its
+//    OAuth flows through a variable specifier the tracer cannot follow.
 for (const asset of [
+	path.join("node_modules", "@earendil-works", "pi-ai", "dist", "auth", "oauth", "openai-chatgpt.js"),
 	path.join("src", "agent", "system-prompt.md"),
 	path.join("src", "agent", "prompts", "teacher", "20-teaching.md"),
 ]) {
 	if (!exists(path.join(STANDALONE, asset))) {
-		console.error(`[build-server] prompt asset missing from the trace: ${asset}`);
+		console.error(`[build-server] runtime asset missing from the trace (check outputFileTracingIncludes in next.config.ts): ${asset}`);
 		process.exit(1);
 	}
 }
