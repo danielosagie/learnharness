@@ -12,7 +12,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { hasProviderKey, strongKeyless, ZeroKeysPill } from "../components/setup-cta.tsx";
 import type { ModelCatalogResponse } from "../src/core/index.ts";
-import { SetupKeysBody } from "../components/setup-dialog.tsx";
+import { SetupKeysBody, setupStage } from "../components/setup-dialog.tsx";
 import { DICTATION_KEYLESS, DEEPGRAM_KEY_ID } from "../components/dictation.tsx";
 import type { AuthKeyStatus } from "../src/core/auth-keys.ts";
 import type { ProviderKeyInfo } from "../components/settings/keys-section.tsx";
@@ -45,6 +45,12 @@ describe("hasProviderKey — the zero-keys pill's truth", () => {
 	it("absent provider keys = zero keys (the pill shows)", () => {
 		assert.equal(hasProviderKey([status("OPENROUTER_API_KEY", false)], PROVIDERS), false);
 		assert.equal(hasProviderKey([], PROVIDERS), false);
+	});
+
+	it("a signed-in Claude Code subscription also unlocks model setup", () => {
+		assert.equal(hasProviderKey([], PROVIDERS, { loggedIn: true }), true);
+		assert.equal(hasProviderKey([], PROVIDERS, { loggedIn: false }), false);
+		assert.equal(setupStage([{ id: "claude-code", keyPresent: true }]), "pickers");
 	});
 });
 
@@ -151,6 +157,7 @@ describe("strongKeyless — the pre-send guard's truth (owner interlude, no-orph
 
 	it("strong provider's key present: the guard does NOT fire — the normal send path stays open", () => {
 		assert.equal(strongKeyless(catalog("openrouter", "openrouter", "anthropic")), false);
+		assert.equal(strongKeyless(catalog("claude-code", "claude-code")), false);
 		// belt check: a provider row never counts when keyPresent is false
 		const lying = catalog("openrouter", "openrouter", "anthropic");
 		lying.providers[0]!.keyPresent = false;

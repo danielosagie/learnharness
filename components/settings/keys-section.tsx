@@ -29,6 +29,7 @@ import { SettingsGroup } from "./controls.tsx";
 import { ProviderMenuList } from "./model-menu.tsx";
 import { MenuShell } from "@/components/menu-shell";
 import { notifySettingsSaved } from "@/components/settings-signal";
+import { ClaudeCodeRow } from "./claude-code-row.tsx";
 
 /** One pi-ai provider with plain API-key auth (the Platform seam —
  *  derived from pi-ai's own env-key table; no drift possible). */
@@ -412,6 +413,9 @@ export function KeysSection({
 
 	return (
 		<>
+			<SettingsGroup label="Subscriptions" testid="group-subscriptions">
+				<ClaudeCodeRow />
+			</SettingsGroup>
 			<SettingsGroup label="Model providers" testid="group-provider-keys">
 				{providerRows.map((status) => (
 					<KeyTableRow

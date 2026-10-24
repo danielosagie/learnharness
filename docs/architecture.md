@@ -168,6 +168,8 @@ Storage is **per-entity semantic ports**, never one generic interface: `ChatStor
 
 The engine side is adapted too: `src/agent/models.ts` (`piEngineFor`) resolves each role's engine from the user's **model slots** (BYOK: `settings.json` `models` section — strong/cheap/vision; a chain that ends empty refuses honestly with 503 `models_not_configured`) — and the teacher/prober conversation runs the **SESSION'S OWN record**: `POST /api/chats` stamps every newborn verbatim from the strong slot (the new-session default, chosen in setup), in-session picks write the session's record (`PUT /api/chats/:id/settings`), and the strong slot never reaches an existing session again (legacy unstamped records fall back to it at resolve time) — per-session models, owner 2026-09-28. Beyond the conversation, `src/server/pi/` bridges the two SDK worlds: `record-adapter.ts` (persisted UIMessage record → stateless pi `Message[]`, dangling tool calls get synthesized INTERRUPTED results) and `ui-stream.ts` (pi agent events → AI-SDK UIMessage SSE).
 
+`src/agent/claude-code.ts` adds the `claude-code` pi-ai provider. Its adapter launches the user's local Claude Code CLI for each model request, renders pi history into one prompt, exposes pi tools through a schema-only MCP server, and translates Claude's stream back into pi events. `src/server/keys.ts` gates the provider on the CLI's login status; the app stores no Claude subscription credentials. This route uses the end user's unmodified Claude Code binary and does not offer a Claude.ai login or intermediate subscription tokens.
+
 ```mermaid
 flowchart LR
     subgraph DRIVING["DRIVING ADAPTERS — inbound"]
@@ -527,6 +529,7 @@ Every place the architecture is designed to be cut — the "one file" a future c
 |---|---|---|
 | Storage decision (JSON→SQLite, remote) | `src/server/stores.ts` | the adapters, once |
 | LLM engine / model per role | settings `models` slots + `src/agent/models.ts` (`piEngineFor`) | provider wiring, one place |
+| Claude Code subscription adapter | `src/agent/claude-code.ts` + `scripts/claude-code-mcp.mjs` | CLI process, history and stream translation |
 | Turn composition | `src/server/chat-handler.ts` | what a turn consists of |
 | Extraction trigger | `src/server/turn-service.ts` (`triggerExtraction`) | when the Library runs |
 | Practice orchestration | `src/agent/subagents/practice-pipeline.ts` | generation/grading flow without touching contracts |
