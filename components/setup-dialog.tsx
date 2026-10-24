@@ -47,6 +47,7 @@ import { ProviderMenuList } from "@/components/settings/model-menu";
 import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/thinking-default";
 import { ThinkingMenuList } from "@/components/settings/model-menu";
 import { ChatGPTRow } from "@/components/settings/chatgpt-row";
+import { ClaudeCodeRow } from "@/components/settings/claude-code-row";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 
 /** The pickers' slot identity — same roster language as the Agent
@@ -149,6 +150,7 @@ export function SetupKeysBody({
 	return (
 		<div className="flex flex-col gap-3 px-6 py-5" data-testid="setup-stage-keys">
 			<ChatGPTRow events={false} />
+			<ClaudeCodeRow events={false} />
 			<p className="text-sm text-foreground">Add a provider key.</p>
 			<p className="text-xs text-muted-foreground">
 				Choose your AI provider and paste its API key. You’ll pick your models next.

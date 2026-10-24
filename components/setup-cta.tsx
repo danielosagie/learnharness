@@ -2,8 +2,8 @@
 /**
  * The zero-keys surfaces (zero-keys wave, 2026-09-25, owner-locked over
  * Platform's 66dbea9 key-presence gate): when NO model-provider key
- * exists, chat / home / /chat/new hoist a composer pill — "Add a
- * provider key" — that takes PRECEDENCE over the models setup CTA
+ * exists, chat / home / /chat/new hoist a composer pill — "Set up AI"
+ * — that takes PRECEDENCE over the models setup CTA
  * (keys come first in the chain: the model pickers list only what
  * keys unlock). Click opens the SetupDialog, whose stage derives to
  * the first-key screen on its own.
@@ -59,7 +59,7 @@ export function useZeroKeys(): boolean {
 	return zeroKeys;
 }
 
-/** The pill itself — the models CTA's chrome and placement, the keys
+/** The pill itself — the models CTA's chrome and placement, the setup
  *  chain's copy. testid "setup-cta-keys" (the models CTA keeps
  *  "setup-cta"; probes can tell them apart). */
 export function ZeroKeysPill({ onOpen, inline = false }: { onOpen: () => void; inline?: boolean }) {
@@ -70,7 +70,7 @@ export function ZeroKeysPill({ onOpen, inline = false }: { onOpen: () => void; i
 			onClick={onOpen}
 			className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
 		>
-			Add a provider key
+			Set up AI
 		</button>
 	);
 	return inline ? button : <div className="pointer-events-auto mb-2 flex justify-center">{button}</div>;

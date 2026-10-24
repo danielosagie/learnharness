@@ -164,13 +164,13 @@ Storage is **per-entity semantic ports**, never one generic interface: `ChatStor
 
 - **`src/server/stores.ts` is THE composition root for storage**: it instantiates the adapters and hands the port objects to everything else (chat-handler, job runner, extraction pipeline, practice pipeline, graph/positions/chats routes, turn services). It is the single place a storage decision (JSON vs SQLite, local vs remote) gets re-made.
 - The storage root injects `oauthStore` into the agent layer's pi-ai model collection. `oauth.json` is a sibling of `AUTH_FILE`; `auth.json` stays a flat environment-variable map. Pi-ai resolves a stored OAuth credential before an ambient API key and refreshes under the store's `modify` lock. `src/server/chatgpt-auth.ts` owns one process-wide login, its cancellation and the `/api/auth/chatgpt/*` transport. Auth changes emit `auth-changed` on the events channel; clients refetch status and model availability.
-- Usage records capture `billing: "subscription"` at the model-call boundary, and `persistTurn` zeroes native pi `usage.cost` on those calls. Core price folds then report zero dollars while retaining tokens; later logout cannot reprice past calls. The marker is provider-neutral, while the engine checks pi-ai's `isSubscription` metadata and the stored OAuth credential at construction.
+- Usage records capture `billing: "subscription"` at the model-call boundary, and `persistTurn` zeroes native pi `usage.cost` on those calls. Core price folds then report zero dollars while retaining tokens; later logout cannot reprice past calls. The marker is provider-neutral: OAuth engines check pi-ai's `isSubscription` metadata and the stored credential, while the Claude Code provider is always subscription billed.
 - **`src/server/chat-handler.ts` is THE composition root for a turn**: it wires the stores, the job runner, the extraction pipeline, the practice pipeline, and the pi engine into the stream response (`setTurnRunner`/`setJobRespawn` register its seams for the wake pipeline). All logic lives behind the seams it calls.
 - The agent layer is dependency-inverted throughout: `createJobRunner({ chatStore, jobStore, deliver })`, `createExtractionPipeline({ chatStore, graphStore, extractor?, auditor?, embedder })`, `createTeacherTools({ chatId, chatStore, jobStore, spawn })`, `createProberAgent`/`createTeacherAgent(engine?, tools?, …)`. Tests inject the same ports production wires — or swap an in-memory port.
 
 The engine side is adapted too: `src/agent/models.ts` (`piEngineFor`) resolves each role's engine from the user's **model slots** (BYOK: `settings.json` `models` section — strong/cheap/vision; a chain that ends empty refuses honestly with 503 `models_not_configured`) — and the teacher/prober conversation runs the **SESSION'S OWN record**: `POST /api/chats` stamps every newborn verbatim from the strong slot (the new-session default, chosen in setup), in-session picks write the session's record (`PUT /api/chats/:id/settings`), and the strong slot never reaches an existing session again (legacy unstamped records fall back to it at resolve time) — per-session models, owner 2026-09-28. Beyond the conversation, `src/server/pi/` bridges the two SDK worlds: `record-adapter.ts` (persisted UIMessage record → stateless pi `Message[]`, dangling tool calls get synthesized INTERRUPTED results) and `ui-stream.ts` (pi agent events → AI-SDK UIMessage SSE).
 
-`src/agent/claude-code.ts` adds the `claude-code` pi-ai provider. Its adapter launches the user's local Claude Code CLI for each model request, renders pi history into one prompt, exposes pi tools through a schema-only MCP server, and translates Claude's stream back into pi events. `src/server/keys.ts` gates the provider on the CLI's login status; the app stores no Claude subscription credentials. This route uses the end user's unmodified Claude Code binary and does not offer a Claude.ai login or intermediate subscription tokens.
+`src/agent/claude-code.ts` adds the `claude-code` pi-ai provider. Its adapter launches the user's local Claude Code CLI for each model request, renders pi history into one prompt, exposes pi tools through a schema-only MCP server, and translates Claude's stream back into pi events. The system prompt, MCP config, and tool schemas go through private per-request files, never argv or environment strings; the CLI keeps a stable cwd for history prompt caching. `src/server/keys.ts` gates the provider on an asynchronously refreshed CLI login status, and auth changes use the same `auth-changed` channel as ChatGPT. The app stores no Claude subscription credentials. This route uses the end user's unmodified Claude Code binary and does not offer a Claude.ai login or intermediate subscription tokens.
 
 ```mermaid
 flowchart LR
@@ -485,14 +485,14 @@ Before 2026-10-02 the client discovered server-side change by polling: a lattice
 | `jobs-changed` | `{chatId}` | every job-store write (create/update/delete-that-removed) |
 | `activity-changed` | `{}` | extraction `setPhase`/`finishExtraction`; practice `registerRow`/phase-writes/`finishPractice` |
 | `chats-changed` | `{}` | list-shape writes only: chat create/rename/delete-that-removed |
-| `auth-changed` | `{}` | ChatGPT login state, credential save, cancel, and logout; consumers refetch status and catalog |
+| `auth-changed` | `{}` | ChatGPT login state, credential save, cancel, and logout; Claude Code CLI status changes; consumers refetch status and catalog |
 
 ### 10.3 Emitter laws
 
 - **Notify-after-write** — the emit always follows the successful write, so a fetch triggered by the event reads committed truth.
 - **Present-entry gating** — mutations that changed nothing (missing-id update, delete of an absent row) emit nothing.
 - **THE SILENCE LAW** — content writers (`saveMessages`, `appendTurnUsage`, `appendExtractionUsage`, `saveSettings`, `saveTree`) are deliberately silent: `saveMessages` would spam per turn-persist, and list-visible effects already arrive via `turn-started`/`turn-settled` (pinned in tests).
-- **Reads never emit** — pure reads are side-effect-free (pinned).
+- **Store reads never emit** — pure reads are side-effect-free (pinned); the Claude Code status getter schedules a background auth check when its cache is stale, and that check emits only if status changes.
 
 The bus itself is a `globalThis`-backed listener set (the Next per-entry-module discipline, same as the turn registry), snapshot-iterated so unsubscribing mid-emit is safe, with per-listener error isolation.
 
@@ -535,7 +535,7 @@ Every place the architecture is designed to be cut — the "one file" a future c
 | Storage decision (JSON→SQLite, remote) | `src/server/stores.ts` | the adapters, once |
 | OAuth credential and login lifecycle | `src/store/oauth.ts` + `src/server/chatgpt-auth.ts` | private credential persistence and one active sign-in |
 | LLM engine / model per role | settings `models` slots + `src/agent/models.ts` (`piEngineFor`) | provider wiring, one place |
-| Claude Code subscription adapter | `src/agent/claude-code.ts` + `scripts/claude-code-mcp.mjs` | CLI process, history and stream translation |
+| Claude Code subscription adapter | `src/agent/claude-code.ts` + `scripts/claude-code-mcp.mjs` | CLI process, private file payloads, auth status, history and stream translation |
 | Turn composition | `src/server/chat-handler.ts` | what a turn consists of |
 | Extraction trigger | `src/server/turn-service.ts` (`triggerExtraction`) | when the Library runs |
 | Practice orchestration | `src/agent/subagents/practice-pipeline.ts` | generation/grading flow without touching contracts |

@@ -37,7 +37,7 @@ describe("OAuth credential adapter", () => {
 		assert.deepEqual(await oauthStore.read("openai"), credential);
 		assert.deepEqual(await oauthStore.list(), [{ providerId: "openai", type: "oauth" }]);
 		assert.equal(fs.statSync(OAUTH_FILE).mode & 0o777, 0o600);
-		assert.equal(oauthDeviceId(), oauthDeviceId());
+		assert.equal(await oauthDeviceId(), await oauthDeviceId());
 		assert.equal(fs.statSync(OAUTH_FILE).mode & 0o777, 0o600);
 		assert.deepEqual(fs.readdirSync(dir).filter((name) => name.includes(".tmp-")), []);
 		await oauthStore.delete("openai");
@@ -67,6 +67,19 @@ describe("OAuth credential adapter", () => {
 		assert.deepEqual(seen, ["first-start", "first-end", "second"]);
 		assert.equal((await oauthStore.read("openai"))?.type, "oauth");
 		await oauthStore.delete("openai");
+	});
+
+	it("queues the device ID behind credential writes", async () => {
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => { release = resolve; });
+		const first = oauthStore.modify("openai", async () => { await gate; return credential; });
+		await Promise.resolve();
+		const id = oauthDeviceId();
+		const next = oauthStore.delete("openai");
+		release();
+		await Promise.all([first, id, next]);
+		assert.equal((await oauthDeviceId()).length > 0, true);
+		assert.equal(await oauthStore.read("openai"), undefined);
 	});
 });
 
@@ -125,8 +138,14 @@ describe("ChatGPT login", () => {
 	it("reports a short error after failed login", async () => {
 		const models = { login: async () => { throw new Error("fake secret error"); } } as unknown as Pick<Models, "login">;
 		await assert.rejects(startChatGPTLogin(models));
-		assert.deepEqual(chatGPTStatus(), { state: "error", message: "Sign-in failed. Try again." });
-		assert.deepEqual(await (await statusRoute.GET()).json(), { state: "error", message: "Sign-in failed. Try again." });
+		assert.deepEqual(chatGPTStatus(), { state: "error", message: "Sign-in failed: fake secret error" });
+		assert.deepEqual(await (await statusRoute.GET()).json(), { state: "error", message: "Sign-in failed: fake secret error" });
+	});
+
+	it("accepts OAuth credentials for another provider in the send gate", async () => {
+		await oauthStore.modify("anthropic", async () => credential);
+		assert.equal(providerKeyPresent("anthropic"), true);
+		await oauthStore.delete("anthropic");
 	});
 });
 

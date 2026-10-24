@@ -209,7 +209,7 @@ export function keyValue(id: string): string | undefined {
  * wins over an API key in pi-ai; otherwise use the same env-first key
  * lookup it uses. Providers without a key entry need no gate. */
 export function providerKeyPresent(provider: string): boolean {
-	if (provider === "openai" && hasOAuthCredential(provider)) return true;
+	if (hasOAuthCredential(provider)) return true;
 	if (provider === "claude-code") return claudeCodeStatus().loggedIn;
 	const info = AUTH_PROVIDER_KEYS.find((p) => p.id === provider);
 	return info ? keyValue(info.envVar) !== undefined : true;

@@ -1,7 +1,7 @@
-import { claudeCodeStatus } from "@/src/server";
+import { refreshClaudeCodeStatus } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export function GET() {
-	return Response.json(claudeCodeStatus(true));
+export async function GET() {
+	return Response.json(await refreshClaudeCodeStatus());
 }
