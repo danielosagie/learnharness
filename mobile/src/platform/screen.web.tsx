@@ -1,0 +1,6 @@
+import React from "react";
+import { Text, View, type ViewProps } from "react-native";
+import { SvgXml } from "react-native-svg";
+// Paper's status area stands in for the system-owned iOS status bar in preview.
+export function Screen({ children, ...props }: ViewProps) { return <View {...props}><View style={{ height: 62, flexShrink: 0, flexDirection: "row", paddingTop: 21, paddingBottom: 19, paddingLeft: 58, paddingRight: 34, justifyContent: "space-between", alignItems: "center" }}><Text style={{ color: "white", fontSize: 17, fontWeight: "600", lineHeight: 22 }}>9:41</Text><SvgXml width={82} height={22} xml={'<svg viewBox="0 0 82 22" xmlns="http://www.w3.org/2000/svg"><g fill="white"><rect x="1" y="13" width="4" height="7" rx="1"/><rect x="7" y="10" width="4" height="10" rx="1"/><rect x="13" y="7" width="4" height="13" rx="1"/><rect x="19" y="4" width="4" height="16" rx="1"/></g><path d="M31 7q8-7 16 0M34 11q5-5 10 0M38 15l2 2 2-2" fill="none" stroke="white" stroke-width="2.2"/><rect x="56" y="5" width="23" height="13" rx="4" fill="none" stroke="#888"/><rect x="58" y="7" width="19" height="9" rx="2" fill="white"/><path d="M81 9v5" stroke="#888"/></svg>'} /></View>{children}</View>; }
+export function useBottomSpace(minimum = 30) { return minimum; }

@@ -96,3 +96,16 @@ describe("shared core and render pipeline", () => {
 		assert.deepEqual(splitVerdict("Good work. Keep going."), { headline: "Good work.", rest: "Keep going." });
 	});
 });
+
+it("keeps TeX emphasis characters intact and computes a prose-sized baseline", async () => {
+	const { mathDimensions } = await import("../src/render/math.ts");
+	const blocks = markdownBlocks("With $a_b*c_d$ here, then $unfinished_");
+	const tokens = (blocks[0] as any).tokens;
+	assert.equal(tokens.find((t: any) => t.type === "lh-math").text, "$a_b*c_d$");
+	assert.equal(tokens.at(-1).text, "");
+	const svg = mathSvg("x^2");
+	const metrics = mathDimensions(svg, 17 * 1.05);
+	assert.ok(metrics.width > 8 && metrics.width < 30);
+	assert.ok(metrics.descent >= 0 && metrics.descent < metrics.height);
+	assert.equal(svg.includes("#E6E6E6"), true);
+});

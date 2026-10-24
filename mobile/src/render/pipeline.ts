@@ -26,4 +26,18 @@ export function segmentMath(raw: string): Segment[] {
 	}
 	return out;
 }
-export function markdownBlocks(text: string): Token[] { return marked.lexer(text); }
+// Keep TeX underscores and stars out of Markdown's emphasis parser, and
+// consume unfinished math as one hidden token during streaming.
+marked.use({ extensions: [{
+	name: "lh-math", level: "inline",
+	start(source) { return source.indexOf("$"); },
+	tokenizer(source) {
+		if (!source.startsWith("$")) return;
+		const first = segmentMath(source)[0];
+		if (!first || first.kind === "text") return;
+		const delimiter = first.display ? "$$" : "$";
+		const raw = first.kind === "pending" ? source : delimiter + first.value + delimiter;
+		return { type: "lh-math", raw, text: first.kind === "pending" ? "" : raw };
+	},
+}] });
+export function markdownBlocks(text: string): Token[] { return marked.lexer(transformMathDelimiters(repairMathForDisplay(text))); }
