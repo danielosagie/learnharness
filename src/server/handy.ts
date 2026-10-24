@@ -60,7 +60,7 @@ export function findHandy(host: HandyHost = realHost()): string | null {
 }
 
 export type HandyExec = (file: string, args: string[]) => Promise<{ stdout: string }>;
-const realExec: HandyExec = async (file, args) => promisify(nodeExecFile)(file, args);
+const realExec: HandyExec = async (file, args) => promisify(nodeExecFile)(file, args, { timeout: 10_000, windowsHide: true });
 
 export async function handyStatus(host: HandyHost = realHost(), exec: HandyExec = realExec) {
 	const binary = findHandy(host);

@@ -736,8 +736,7 @@ export function DictationBar({ dictation }: { dictation: Dictation }) {
 	}, [active]);
 
 	if (!active) {
-		return (
-			<div className="min-w-0 flex-1">
+		const inactiveButton = (
 			<Hint
 				// Errored: the button span truncates the line — the tooltip is its
 				// full reveal (the keyless line KEEPS "Deepgram" — owner overrule:
@@ -749,7 +748,7 @@ export function DictationBar({ dictation }: { dictation: Dictation }) {
 			>
 				<button
 					type="button"
-						disabled={ready === false}
+					disabled={ready === false}
 					onClick={() => {
 						if (keyless) {
 							clearError();
@@ -760,27 +759,32 @@ export function DictationBar({ dictation }: { dictation: Dictation }) {
 					}}
 					aria-label={error ? `Dictation failed: ${error}` : "Start dictation"}
 					data-testid="dictation-toggle"
-				// Same blurring as the floating chrome (owner, fix wave round 3),
-			// but lower opacity — the mic stays quieter than the model pills.
-			className="flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-border/50 bg-card/50 text-xs text-muted-foreground/70 shadow-lg backdrop-blur transition-colors hover:border-border hover:text-muted-foreground"
-			>
+					// Same blurring as the floating chrome (owner, fix wave round 3),
+					// but lower opacity — the mic stays quieter than the model pills.
+					className="flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-border/50 bg-card/50 text-xs text-muted-foreground/70 shadow-lg backdrop-blur transition-colors hover:border-border hover:text-muted-foreground"
+				>
 					<MicIcon className="size-3.5" />
 					<span className="max-w-full truncate">{error ?? "Dictate"}</span>
 				</button>
 			</Hint>
-			{error === DICTATION_KEYLESS && hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+		);
+		if (error !== DICTATION_KEYLESS || !hint) return inactiveButton;
+		return (
+			<div className="min-w-0 flex-1">
+				{inactiveButton}
+				<span className="text-xs text-muted-foreground">{hint}</span>
 			</div>
 		);
 	}
 	if (engine === "handy") {
 		return (
 			<div className="flex w-full min-w-0 items-center gap-2" data-testid="dictation-bar">
-			<button type="button" onClick={toggle} disabled={phase === "stopping" || phase === "connecting"}
-				aria-label="Stop dictation" data-testid="dictation-toggle"
-				className="flex h-7 items-center gap-1.5 rounded-md bg-destructive/10 px-2 text-xs text-destructive">
-				<MicIcon className="size-3.5" /> {phase === "stopping" ? "Waiting for Handy" : "Listening in Handy"}
-			</button>
-		</div>
+				<button type="button" onClick={toggle} disabled={phase === "connecting"}
+					aria-label={phase === "stopping" ? "Cancel dictation" : "Stop dictation"} data-testid="dictation-toggle"
+					className="flex h-7 items-center gap-1.5 rounded-md bg-destructive/10 px-2 text-xs text-destructive">
+					<MicIcon className="size-3.5" /> {phase === "stopping" ? "Waiting for Handy · Cancel" : "Listening in Handy"}
+				</button>
+			</div>
 		);
 	}
 

@@ -7,6 +7,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+	if ((request.headers.get("content-type") ?? "").split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
+		return Response.json({ error: "Content-Type must be application/json" }, { status: 415 });
+	}
 	const body = await request.json().catch(() => null) as { command?: unknown } | null;
 	if (body?.command !== "toggle" && body?.command !== "cancel") {
 		return Response.json({ error: "command must be toggle or cancel" }, { status: 400 });

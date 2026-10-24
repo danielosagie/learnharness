@@ -4,13 +4,14 @@ import { describe, it } from "node:test";
 import { parseHTML } from "linkedom";
 import { joinDictation } from "../components/dictation.tsx";
 import { appendToDictationTarget, claimPrimaryDictationTarget, routeDictationPaste, setComposerDictationTarget } from "../components/dictation-paste.tsx";
-import { createHandyController, HANDY_TRIPWIRE_MS } from "../components/handy-control.ts";
+import { createHandyController, HANDY_STOP_TRIPWIRE_MS, HANDY_TRIPWIRE_MS } from "../components/handy-control.ts";
+import { POST as handyPost } from "../app/api/stt/handy/route.ts";
 import { resolveDictationEngine, sanitizeUserSettings } from "../src/core/settings.ts";
 import { parseDictationSettingsBody } from "../src/server/settings-body.ts";
 import { commandHandy, findHandy, handyStatus, type HandyHost } from "../src/server/handy.ts";
 
 describe("Handy paste routing", () => {
-	const dom = parseHTML("<html><body><textarea></textarea><input><div contenteditable='true'><b>text</b></div><button>Mic</button></body></html>");
+	const dom = parseHTML("<html><body><textarea></textarea><input><input type='search'><input type='checkbox'><div contenteditable='true'><b>text</b></div><button>Mic</button></body></html>");
 	(globalThis as { window?: unknown }).window = dom.window;
 	(globalThis as { CustomEvent?: unknown }).CustomEvent = dom.window.CustomEvent;
 	const { document } = dom;
@@ -36,13 +37,46 @@ describe("Handy paste routing", () => {
 	});
 	it("keeps native pastes in inputs, textareas and contenteditable descendants", () => {
 		let calls = 0;
+		let notifications = 0;
+		const onPaste = () => { notifications++; };
+		window.addEventListener("lh:dictation-paste", onPaste);
 		setComposerDictationTarget(() => { calls++; });
-		for (const selector of ["input", "textarea", "b"]) {
+		for (const selector of ["input:not([type])", "input[type='search']", "textarea", "b"]) {
 			const { event, prevented } = paste("native");
 			assert.equal(routeDictationPaste(event, document.querySelector(selector)), false);
 			assert.equal(prevented(), false);
 		}
 		assert.equal(calls, 0);
+		assert.equal(notifications, 4);
+		setComposerDictationTarget(null);
+		window.removeEventListener("lh:dictation-paste", onPaste);
+	});
+	it("routes pastes when a non-text input has focus and notifies Handy", () => {
+		let received = "";
+		let notifications = 0;
+		const onPaste = () => { notifications++; };
+		window.addEventListener("lh:dictation-paste", onPaste);
+		setComposerDictationTarget((text) => { received = text; });
+		const { event, prevented } = paste("spoken");
+		assert.equal(routeDictationPaste(event, document.querySelector("input[type='checkbox']")), true);
+		assert.equal(received, "spoken");
+		assert.equal(prevented(), true);
+		assert.equal(notifications, 1);
+		setComposerDictationTarget(null);
+		window.removeEventListener("lh:dictation-paste", onPaste);
+	});
+	it("native and routed text pastes each end an active Handy run", async () => {
+		setComposerDictationTarget(() => {});
+		const controller = createHandyController(async () => ({ ok: true }), () => {});
+		const onPaste = () => controller.onPaste();
+		window.addEventListener("lh:dictation-paste", onPaste);
+		for (const selector of ["textarea", "button"]) {
+			await controller.toggle();
+			assert.equal(controller.phase, "recording");
+			routeDictationPaste(paste("spoken").event, document.querySelector(selector));
+			assert.equal(controller.phase, "idle");
+		}
+		window.removeEventListener("lh:dictation-paste", onPaste);
 		setComposerDictationTarget(null);
 	});
 	it("does nothing without a target or text/plain", () => {
@@ -52,6 +86,18 @@ describe("Handy paste routing", () => {
 		setComposerDictationTarget(() => assert.fail("no text should route"));
 		assert.equal(routeDictationPaste(paste("").event, document.body), false);
 		setComposerDictationTarget(null);
+	});
+});
+
+describe("Handy route", () => {
+	it("rejects simple cross-origin content types before executing a command", async () => {
+		for (const contentType of ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data", ""]) {
+			const response = await handyPost(new Request("http://test/api/stt/handy", {
+				method: "POST", body: JSON.stringify({ command: "toggle" }),
+				headers: contentType ? { "content-type": contentType } : {},
+			}));
+			assert.equal(response.status, 415);
+		}
 	});
 });
 
@@ -93,16 +139,19 @@ describe("Handy button controller", () => {
 	it("click, stop, paste and Esc follow the command state machine", async () => {
 		const commands: string[] = [];
 		const states: string[] = [];
-		let timeout: (() => void) | undefined;
+		const timeouts = new Map<number, { run: () => void; ms: number }>();
+		let nextTimer = 0;
 		const controller = createHandyController(async (command) => { commands.push(command); return { ok: true }; }, (phase) => states.push(phase), {
-			setTimeout: ((fn: () => void, ms: number) => { assert.equal(ms, HANDY_TRIPWIRE_MS); timeout = fn; return 1; }) as typeof setTimeout,
-			clearTimeout: (() => { timeout = undefined; }) as typeof clearTimeout,
+			setTimeout: ((fn: () => void, ms: number) => { timeouts.set(++nextTimer, { run: fn, ms }); return nextTimer; }) as typeof setTimeout,
+			clearTimeout: ((id: number) => { timeouts.delete(id); }) as typeof clearTimeout,
 		});
 		await controller.toggle();
 		assert.equal(controller.phase, "recording");
+		assert.deepEqual([...timeouts.values()].map((timer) => timer.ms), [HANDY_TRIPWIRE_MS]);
 		const finished = controller.finish();
-		await Promise.resolve();
+		await new Promise<void>((resolve) => setImmediate(resolve));
 		assert.equal(controller.phase, "stopping");
+		assert.deepEqual([...timeouts.values()].map((timer) => timer.ms), [HANDY_STOP_TRIPWIRE_MS]);
 		controller.onPaste();
 		await finished;
 		assert.equal(controller.phase, "idle");
@@ -111,7 +160,37 @@ describe("Handy button controller", () => {
 		assert.equal(controller.phase, "idle");
 		assert.deepEqual(commands, ["toggle", "toggle", "toggle", "cancel"]);
 		assert.deepEqual(states, ["connecting", "recording", "stopping", "idle", "connecting", "recording", "idle"]);
-		assert.equal(timeout, undefined);
+		assert.equal(timeouts.size, 0);
+	});
+	it("resolves finish after the stop tripwire without an error", async () => {
+		const timeouts = new Map<number, { run: () => void; ms: number }>();
+		let nextTimer = 0;
+		let error: string | null = null;
+		const controller = createHandyController(async () => ({ ok: true }), (_, message) => { error = message; }, {
+			setTimeout: ((fn: () => void, ms: number) => { timeouts.set(++nextTimer, { run: fn, ms }); return nextTimer; }) as typeof setTimeout,
+			clearTimeout: ((id: number) => { timeouts.delete(id); }) as typeof clearTimeout,
+		});
+		await controller.toggle();
+		const finished = controller.finish();
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		const [stopTimer] = [...timeouts.values()];
+		assert.ok(stopTimer);
+		assert.equal(stopTimer.ms, HANDY_STOP_TRIPWIRE_MS);
+		stopTimer.run();
+		await finished;
+		assert.equal(controller.phase, "idle");
+		assert.equal(error, null);
+		assert.equal(timeouts.size, 0);
+	});
+	it("a second click while stopping sends cancel and resets", async () => {
+		const commands: string[] = [];
+		const controller = createHandyController(async (command) => { commands.push(command); return { ok: true }; }, () => {});
+		await controller.toggle();
+		await controller.toggle();
+		assert.equal(controller.phase, "stopping");
+		await controller.toggle();
+		assert.equal(controller.phase, "idle");
+		assert.deepEqual(commands, ["toggle", "toggle", "cancel"]);
 	});
 	it("resets on a failed command or missing paste tripwire", async () => {
 		let fail = true;

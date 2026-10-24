@@ -30,7 +30,7 @@ export function appendToDictationTarget(text: string): boolean {
 
 function editable(element: Element | null): boolean {
 	for (let node = element; node; node = node.parentElement) {
-		if (node.matches("input, textarea")) return true;
+		if (node.matches("textarea, input:not([type]), input[type='text'], input[type='search'], input[type='url'], input[type='tel'], input[type='email'], input[type='password'], input[type='number']")) return true;
 		if (node.hasAttribute("contenteditable")) return node.getAttribute("contenteditable") !== "false";
 	}
 	return false;
@@ -38,11 +38,11 @@ function editable(element: Element | null): boolean {
 
 /** Returns whether the paste was routed, for the browser listener and tests. */
 export function routeDictationPaste(event: ClipboardEvent, active: Element | null, append = appendToDictationTarget): boolean {
-	if (editable(active)) return false;
 	const text = event.clipboardData?.getData("text/plain");
-	if (!text || !append(text)) return false;
-	event.preventDefault();
+	if (!text) return false;
 	window.dispatchEvent(new CustomEvent("lh:dictation-paste"));
+	if (editable(active) || !append(text)) return false;
+	event.preventDefault();
 	return true;
 }
 
