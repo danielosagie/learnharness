@@ -49,16 +49,16 @@ export function PhoneProvider({ children }: { children: React.ReactNode }) {
 				try {
 					await client.hello();
 					setConnected(true);
-					delay = 1000;
+					setEventVersion((v) => v + 1);
 					for await (const frame of client.stream("/api/events", abort.signal)) {
 						if (!active) break;
 						setConnected(true);
+						delay = 1000;
 						if (frame.event !== "message" || frame.data !== "ping") setEventVersion((v) => v + 1);
 					}
 				} catch { if (active) setConnected(false); }
 				if (!active) break;
-				await new Promise((resolve) => setTimeout(resolve, delay * (0.75 + Math.random() * 0.5)));
-				setEventVersion((v) => v + 1);
+				await new Promise((resolve) => setTimeout(resolve, Math.min(30_000, delay * (0.75 + Math.random() * 0.5))));
 				delay = Math.min(30_000, delay * 2);
 			}
 		})();
