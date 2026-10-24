@@ -110,8 +110,13 @@ export function dueReviews(state: ReadonlyMap<string, PropositionReviewState>, n
 		if (x.lane !== y.lane) return x.lane === "review" ? -1 : 1;
 		return x.lane === "review" ? (x.retrievability! - y.retrievability! || (serves.get(b) ?? 0) - (serves.get(a) ?? 0) || a.localeCompare(b)) : (born.get(a)! - born.get(b)! || a.localeCompare(b));
 	}).map(([id]) => id);
-	const future = [...state.values()].filter((item) => item.dueAt > now).map((item) => item.dueAt);
-	return { due, nextDueAt: future.length ? Math.min(...future) : null };
+	// A loop, not Math.min(...spread): spreading every node into call
+	// arguments overflows the stack on a large enough graph.
+	let nextDueAt: number | null = null;
+	for (const item of state.values()) {
+		if (item.dueAt > now && (nextDueAt === null || item.dueAt < nextDueAt)) nextDueAt = item.dueAt;
+	}
+	return { due, nextDueAt };
 }
 
 /** Score only later reviews: the first practice establishes state but has no forecast. */
