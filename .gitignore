@@ -14,6 +14,7 @@ dist/
 # Dev credentials stay outside git.
 auth.json
 oauth.json
+.oauth.json.tmp-*
 
 # dev-fresh launcher scratch (fresh-user sim): disposable per launch
 .fresh-data/
