@@ -360,6 +360,7 @@ export interface CompactionSettings {
  *  preserved verbatim by the sanitizer (forward-compat with newer records). */
 export interface UserSettings {
 	version: number;
+	dictation?: DictationSettings;
 	general?: GeneralSettings;
 	agent?: AgentSettings;
 	/** The strong/cheap/vision model slots (model slots wave, 2026-09-20). */
@@ -368,6 +369,20 @@ export interface UserSettings {
 	graph?: GraphSettings;
 	compaction?: CompactionSettings;
 	[key: string]: unknown;
+}
+
+export type DictationEngine = "handy" | "deepgram";
+export interface DictationSettings {
+	engine?: DictationEngine;
+}
+
+/** Host facts are arguments so the browser and server resolve the same choice. */
+export function resolveDictationEngine(
+	settings: DictationSettings | undefined,
+	hasDeepgramKey: boolean,
+	handyInstalled: boolean,
+): DictationEngine {
+	return settings?.engine ?? (hasDeepgramKey ? "deepgram" : handyInstalled ? "handy" : "deepgram");
 }
 
 /** Factory defaults for everything core can pin (owner decisions
@@ -612,6 +627,10 @@ export function sanitizeUserSettings(raw: unknown): UserSettings | null {
 	const out: UserSettings = {
 		version: typeof r.version === "number" && Number.isInteger(r.version) && r.version >= 1 ? r.version : CURRENT_SETTINGS_VERSION,
 	};
+	if (r.dictation !== null && typeof r.dictation === "object" && !Array.isArray(r.dictation)) {
+		const engine = (r.dictation as Record<string, unknown>).engine;
+		out.dictation = engine === "handy" || engine === "deepgram" ? { engine } : {};
+	}
 	if (r.general !== null && typeof r.general === "object" && !Array.isArray(r.general)) {
 		out.general = sanitizeGeneral(r.general as Record<string, unknown>);
 	}
@@ -637,7 +656,7 @@ export function sanitizeUserSettings(raw: unknown): UserSettings | null {
 	// 2026-09-28) — a fossil copy on disk must never resurrect through
 	// reads (and any later write flushes it from the file for good).
 	for (const [key, value] of Object.entries(r)) {
-		if (key === "chat") continue;
+		if (key === "chat" || key === "dictation") continue;
 		if (!(key in out)) out[key] = value;
 	}
 	return out;
