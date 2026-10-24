@@ -116,7 +116,11 @@ mac:
   # reads this string; macOS asks regardless of Electron's own handlers.
   extendInfo:
     NSMicrophoneUsageDescription: "LearnHarness uses the microphone only for speech-to-text input into your sessions."
-  hardenedRuntime: true
+  # PERSONAL BUILD: ad-hoc signature ("-") instead of a Developer ID, and no
+  # hardened runtime — its library validation rejects ad-hoc frameworks,
+  # which carry no Team ID. Apple Silicon only needs a valid (ad-hoc) seal.
+  identity: "-"
+  hardenedRuntime: false
   entitlements: build/entitlements.mac.plist
   # Signing + notarization (flipped 2026-10-08): identity auto-detects the
   # Developer ID Application certificate from the login keychain;
@@ -125,9 +129,10 @@ mac:
   # via the LH_NOTARY keychain profile, env baked into desktop:dist).
   # Adds minutes per build (Apple's scan queue). Verification battery:
   # codesign --verify --deep / spctl --assess / stapler validate.
-  notarize: true
+  # PERSONAL BUILD: nothing to notarize without a Developer ID.
+  notarize: false
 dmg:
-  title: "${productName} ${version}"
+  title: "${productName} ${version} (personal)"
   # Owner artwork: 540×380 at 1×; the sibling background@2x.png is
   # combined into a Retina TIFF by dmg-builder. Centres use 1× coordinates.
   background: build/background.png
@@ -170,15 +175,12 @@ linux:
   syncDesktopName: true
   # Both targets update via electron-updater 6.8.9. AppImage replaces its
   # own file; deb uses dpkg/apt and may request administrator permission.
+# PERSONAL BUILD: the update feed is Daniel's fork, not upstream, so an
+# upstream release can never replace this build (the fork publishes no
+# releases; the updater just logs "no release" — it can never take the app
+# down). Shape kept as upstream's: scripts/verify-release.ts pins it.
 publish:
-  # Update feed = GitHub Releases (decided 2026-10-08): latest-mac.yml +
-  # zip/blockmap live on releases; electron-updater reads them anonymously.
-  # REQUIRES THE REPO TO BE PUBLIC before 0.3.0 ships — anonymous downloads
-  # from a private repo are impossible, and a token baked into the app
-  # would be a leak. desktop:dist passes no --publish flag, so builds never
-  # upload; publishing happens at release time (GH_TOKEN + --publish).
   - provider: github
-    owner: amosblomqvist
+    owner: danielosagie
     repo: learnharness
-    # All three CI jobs contribute assets; only the owner publishes it.
     releaseType: draft
