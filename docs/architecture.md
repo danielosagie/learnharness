@@ -476,6 +476,7 @@ Before 2026-10-02 the client discovered server-side change by polling: a lattice
 | `activity-changed` | `{}` | extraction `setPhase`/`finishExtraction`; practice `registerRow`/phase-writes/`finishPractice` |
 | `chats-changed` | `{}` | list-shape writes only: chat create/rename/delete-that-removed |
 | `auth-changed` | `{}` | ChatGPT login state, credential save, cancel, and logout; Claude Code CLI status changes; consumers refetch status and catalog |
+| `phone-changed` | `{}` | phone listener, pairing, or device state changes; the Phone settings section refetches status |
 
 ### 10.3 Emitter laws
 
@@ -535,6 +536,7 @@ Every place the architecture is designed to be cut — the "one file" a future c
 | Agent construction (tests) | `handleChatRequest(req, buildAgent?)` | scripted engines, no refactor |
 | Sub-agent verification | `sub-agents/headless.ts` (`headlessOverride`) | demo/SVG verification, no Chrome |
 | Data location (Electron) | `LH_DATA_DIR` env (`config.ts` PATHS) | where data/ lives, nothing else |
+| Paired phone access | `instrumentation.ts` + `src/server/phone.ts` + `src/store/phone-devices.ts` | the opt-in Tailscale listener, pairing and proxy, and hashed device tokens |
 | Desktop host | `electron/main.cjs` | launcher/security shell only |
 | Dictation | `components/dictation-paste.tsx` (focused-field routing) + `components/dictation.tsx` (engine and target) + `src/server/handy.ts` (host command adapter) | Handy paste/CLI or Deepgram streaming; the primary target and `joinDictation` define shared append behavior |
 

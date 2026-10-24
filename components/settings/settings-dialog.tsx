@@ -51,6 +51,7 @@ import { KeysSection } from "./keys-section.tsx";
 import { Hint } from "@/components/ui/hint";
 import { AppearanceSection, GraphSection } from "./appearance-section.tsx";
 import { KeyboardSection } from "./keyboard-section.tsx";
+import { PhoneSection } from "./phone-section.tsx";
 
 function DictationEngineControl({ stored, onChange }: { stored?: DictationEngine; onChange: (engine: DictationEngine) => void }) {
 	const [facts, setFacts] = useState<{ key: boolean; installed: boolean } | null>(null);
@@ -88,6 +89,7 @@ function DictationEngineControl({ stored, onChange }: { stored?: DictationEngine
 const SECTIONS = [
 	{ id: "general", label: "General" },
 	{ id: "keys", label: "Keys" },
+	{ id: "phone", label: "Phone" },
 	{ id: "agent", label: "Agent" },
 	{ id: "appearance", label: "Appearance" },
 	{ id: "graph", label: "Graph" },
@@ -416,6 +418,11 @@ export function SettingsDialogBody({
 										/>
 									} />
 								</SettingsSection>
+							)}
+							{active === "phone" && (
+							<SettingsSection title="Phone" testid="section-phone">
+								<PhoneSection />
+							</SettingsSection>
 							)}
 							{active === "agent" && (
 								<SettingsSection
