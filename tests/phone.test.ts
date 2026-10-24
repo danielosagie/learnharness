@@ -9,14 +9,14 @@ import { after, describe, it } from "node:test";
 const data = mkdtempSync(path.join(tmpdir(), "lh-phone-test-"));
 process.env.LH_DATA_DIR = data;
 process.env.LH_PHONE_HOST = "127.0.0.1";
-const { tailscaleAddress, mintPairing, setPhoneEnabled, removePhoneDevice, phoneStatus, PHONE_PORT } = await import("../src/server/phone.ts");
+const { tailscaleAddress, mintPairing, setPhoneEnabled, removePhoneDevice, phoneStatus, PHONE_PORT, normalizePhoneCode, phoneUpstreamPort } = await import("../src/server/phone.ts");
 const { parsePhoneSettingsBody } = await import("../src/server/settings-body.ts");
 const { withTurnHeartbeat } = await import("../src/server/pi/ui-stream.ts");
 const management = await import("../app/api/phone/route.ts");
 const pairingRoute = await import("../app/api/phone/pairing/route.ts");
 const deviceRoute = await import("../app/api/phone/devices/[id]/route.ts");
 const state = () => (globalThis as unknown as Record<symbol, {
-	server?: Server; timer?: ReturnType<typeof setInterval>; clock: () => number; failures: number[]; blockedUntil: number;
+	pairing?: { code: string; link: string; expiresAt: string }; server?: Server; timer?: ReturnType<typeof setInterval>; clock: () => number; failures: number[]; blockedUntil: number;
 }>)[Symbol.for("lh.phone")]!;
 let upstream: Server | undefined;
 const phone = (route: string, options?: RequestInit) => fetch(`http://127.0.0.1:${PHONE_PORT}${route}`, options);
@@ -33,6 +33,14 @@ after(async () => {
 });
 
 describe("phone access", () => {
+	it("normalizes Crockford look-alikes and resolves the listening origin", () => {
+		assert.equal(normalizePhoneCode("oOiIlLab"), "001111AB");
+		assert.equal(phoneUpstreamPort({ __NEXT_PRIVATE_ORIGIN: "http://localhost:3218" }), 3218);
+		assert.equal(phoneUpstreamPort({ __NEXT_PRIVATE_ORIGIN: "http://localhost:3219", PORT: "3000" }), 3219);
+		assert.equal(phoneUpstreamPort({ PORT: "4321" }), 4321);
+		assert.equal(phoneUpstreamPort({}), 3000);
+	});
+
 	it("requires both Tailscale addresses on the same non-loopback interface", () => {
 		const v4 = (address: string, internal = false) => ({ address, family: "IPv4", internal }) as NetworkInterfaceInfo;
 		const v6 = (address: string) => ({ address, family: "IPv6", internal: false }) as NetworkInterfaceInfo;
@@ -94,9 +102,11 @@ describe("phone access", () => {
 		assert.equal((await (await phone("/api/phone/hello")).json() as { app: string }).app, "learnharness");
 		const first = mintPairing()!;
 		const second = mintPairing()!;
+		second.code = "0011ABCD";
+		state().pairing!.code = second.code;
 		assert.notEqual(first.code, second.code);
 		assert.equal((await phone("/api/phone/pair", json({ code: first.code, deviceName: "iPhone" }))).status, 401);
-		const paired = await phone("/api/phone/pair", json({ code: second.code, deviceName: "iPhone" }));
+		const paired = await phone("/api/phone/pair", json({ code: "oOilabcd", deviceName: "iPhone" }));
 		assert.equal(paired.status, 200);
 		const { token } = await paired.json() as { token: string };
 		assert.equal(token.length, 43);
@@ -111,6 +121,19 @@ describe("phone access", () => {
 		assert.equal(forwarded["x-lh-phone"], "1");
 		assert.notEqual(forwarded["x-forwarded-for"], "client");
 		assert.equal(forwarded.authorization, undefined);
+		// The CLI-selected origin must work without a PORT environment variable.
+		const configuredPort = process.env.PORT;
+		const previousOrigin = process.env.__NEXT_PRIVATE_ORIGIN;
+		try {
+			delete process.env.PORT;
+			process.env.__NEXT_PRIVATE_ORIGIN = `http://localhost:${configuredPort}`;
+			assert.equal(await (await phone("/cli-port", { headers })).text(), "GET /cli-port");
+			assert.equal(forwarded.host, `127.0.0.1:${configuredPort}`);
+		} finally {
+			process.env.PORT = configuredPort;
+			if (previousOrigin === undefined) delete process.env.__NEXT_PRIVATE_ORIGIN;
+			else process.env.__NEXT_PRIVATE_ORIGIN = previousOrigin;
+		}
 		const stream = await phone("/stream", { headers });
 		const reader = stream.body!.getReader();
 		const firstChunk = await reader.read();

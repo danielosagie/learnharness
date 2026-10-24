@@ -49,6 +49,18 @@ export function tailscaleAddress(interfaces: NodeJS.Dict<NetworkInterfaceInfo[]>
 	}
 }
 
+export function normalizePhoneCode(value: string): string { return value.toUpperCase().replaceAll("O", "0").replace(/[IL]/g, "1"); }
+
+/** Next publishes its selected origin after listen, including CLI ports and retries.
+ *  Standalone/Electron supply PORT directly. Resolve at request time, after startup. */
+export function phoneUpstreamPort(env: Readonly<Record<string, string | undefined>> = process.env): number {
+	if (env.__NEXT_PRIVATE_ORIGIN) {
+		const origin = new URL(env.__NEXT_PRIVATE_ORIGIN);
+		return Number(origin.port || (origin.protocol === "https:" ? 443 : 80));
+	}
+	return Number(env.PORT || 3000);
+}
+
 function code() { return Array.from(randomBytes(8), (byte) => ALPHABET[byte & 31]).join(""); }
 function hash(token: string) { return createHash("sha256").update(token).digest("hex"); }
 function publicDevice(device: PhoneDevice) {
@@ -129,7 +141,7 @@ async function pair(req: IncomingMessage, res: ServerResponse) {
 		const parsed: unknown = JSON.parse(body);
 		const input = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
 		const pairing = currentPairing();
-		if (typeof input.code !== "string" || !pairing || input.code.toUpperCase() !== pairing.code) {
+		if (typeof input.code !== "string" || !pairing || normalizePhoneCode(input.code) !== pairing.code) {
 			state.failures = state.failures.filter((at) => now - at < 60_000);
 			state.failures.push(now);
 			if (state.failures.length >= 5) {
@@ -162,11 +174,12 @@ function stripHeaders(headers: http.IncomingHttpHeaders) {
 function forward(req: IncomingMessage, res: ServerResponse) {
 	const headers = stripHeaders(req.headers);
 	delete headers.authorization;
-	headers.host = `127.0.0.1:${process.env.PORT || "3000"}`;
+	const port = phoneUpstreamPort();
+	headers.host = `127.0.0.1:${port}`;
 	headers["accept-encoding"] = "identity";
 	headers["x-forwarded-for"] = req.socket.remoteAddress ?? "";
 	headers["x-lh-phone"] = "1";
-	const upstream = http.request({ host: "127.0.0.1", port: Number(process.env.PORT || 3000), method: req.method, path: req.url, headers }, (response) => {
+	const upstream = http.request({ host: "127.0.0.1", port, method: req.method, path: req.url, headers }, (response) => {
 		const responseHeaders = stripHeaders(response.headers);
 		res.writeHead(response.statusCode ?? 502, responseHeaders);
 		response.pipe(res);
