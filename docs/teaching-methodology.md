@@ -15,7 +15,7 @@ The probing phase defines both states precisely: it brackets the current underst
 
 The terminal condition of a session is not recall, not being able to answer questions, not coverage — it is that the **goal understanding feels obviously true** to the learner. The strength of understanding is measured in self-evidence. A fact that can be recited but doesn't feel self-evident is not learned; it is memorized, and memorized facts rot. A fact that feels obviously true is held.
 
-This is also the mechanism of retention: the brain commits fully to a fact only when it is safe to lock in (nothing more fundamental might later contradict it) and when it is connected (held in place by its relations, not by rehearsal). Feeling obviously true *is* the felt experience of both conditions being met.
+Connection makes an understanding coherent, but held knowledge still decays without spaced retrieval. Practice owns the timing of retrieval across sessions; teaching builds the understanding that practice keeps available.
 
 ## 3. The click — loose facts collapsing into generators
 

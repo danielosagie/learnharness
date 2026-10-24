@@ -8,9 +8,8 @@
  * from the session's plan tree. The graph is an extraction of the reasoning
  * chains from all teaching sessions (and imported notes) — NOTHING else:
  * no quiz outcomes, no understanding assessments (2026-09-27 cleanup).
- * Anything not
- * yet decided (the state model, strength derivation, selection strategies) is deliberately NOT here — transitional
- * stubs carry the renderer until those land.
+ * Practice review state is derived separately from chat records; it never
+ * becomes a graph-node field.
  *
  * Part of the domain-split contracts (src/core/contracts/): each domain file
  * is owned outright by its stream — cross-domain schema changes go through
