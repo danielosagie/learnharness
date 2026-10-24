@@ -1,3 +1,4 @@
+import { previewFixtures } from './preview-fixtures.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,8 +17,10 @@ const turnEndIndex = new Map(turns.map((name) => {
 }));
 const chats = new Map([[original.id, { ...original, kind: 'teach', turnInFlight: false }]]);
 const turnNumbers = new Map([[original.id, 1]]);
+const preview = process.env.PHONE_PREVIEW === '1' ? previewFixtures(finalRecord) : null;
+if (preview) for (const chat of preview.records) chats.set(chat.id, chat);
 const token = crypto.randomBytes(16).toString('hex');
-const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+const code = process.env.MOCK_PAIR_CODE ?? crypto.randomBytes(4).toString('hex').toUpperCase();
 const events = new Set();
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
 const notify = (event, payload = {}) => { for (const res of events) res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`); };
@@ -74,12 +77,13 @@ const streamPractice = async (res, chat) => {
 };
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost'); const pathname = url.pathname;
-  if (pathname === '/api/phone/hello') return json(res, 200, { app: 'learnharness', version: 'mock', name: 'Mock MacBook' });
-  if (pathname === '/api/phone/pair' && req.method === 'POST') { const body = await readBody(req); return body.code === code ? json(res, 200, { token, name: 'Mock MacBook' }) : json(res, 401, { message: 'Bad or expired code' }); }
+  if (preview) { res.setHeader('access-control-allow-origin', 'http://localhost:8084'); res.setHeader('access-control-allow-headers', 'authorization,content-type'); res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS'); if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); } }
+  if (pathname === '/api/phone/hello') return json(res, 200, { app: 'learnharness', version: 'mock', name: preview ? 'MacBook' : 'Mock MacBook' });
+  if (pathname === '/api/phone/pair' && req.method === 'POST') { const body = await readBody(req); return body.code === code ? json(res, 200, { token, name: preview ? 'MacBook' : 'Mock MacBook' }) : json(res, 401, { message: 'Bad or expired code' }); }
   if (req.headers.authorization !== `Bearer ${token}`) return json(res, 401, { message: 'Not paired' });
   if (pathname === '/api/events') { res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' }); events.add(res); res.write(': ping\n\n'); const timer = setInterval(() => res.write(': ping\n\n'), 1000); req.on('close', () => { clearInterval(timer); events.delete(res); }); return; }
-  if (pathname === '/api/review') { const ids = url.searchParams.get('ids'); return ids !== null ? json(res, 200, { items: due.filter((p) => ids.split(',').includes(p.id)).map((p, i) => ({ id: p.id, name: p.name, dueAt: new Date(Date.now() + (9 + i * 5) * 86_400_000).toISOString(), lane: 'review' })) }) : json(res, 200, { due: due.filter((p) => !solved.has(p.id)), nextDueAt: null }); }
-  if (pathname === '/api/chats' && req.method === 'GET') return json(res, 200, { chats: [...chats.values()].map(chatSummary) });
+  if (pathname === '/api/review') { const ids = url.searchParams.get('ids'); return ids !== null ? json(res, 200, { items: due.filter((p) => ids.split(',').includes(p.id)).map((p, i) => ({ id: p.id, name: p.name, dueAt: new Date(Date.now() + ([9, 14, 21][i] ?? 9) * 86_400_000).toISOString(), lane: 'review' })) }) : json(res, 200, { due: due.filter((p) => !solved.has(p.id)), nextDueAt: null }); }
+  if (pathname === '/api/chats' && req.method === 'GET') return json(res, 200, { chats: preview ? preview.summaries() : [...chats.values()].map(chatSummary) });
   if (pathname === '/api/chats' && req.method === 'POST') { const body = await readBody(req); const id = crypto.randomUUID(); const messages = body.kind === 'practice' && body.graphContext?.propositions?.length ? [{ id: crypto.randomUUID(), role: 'custom', customType: 'graph-context', details: { propositions: body.graphContext.propositions, chains: [] }, content: '[Session context]', display: true, timestamp: Date.now() }] : []; const chat = { ...original, id, title: body.title, kind: body.kind ?? 'teach', messages, turnInFlight: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; chats.set(id, chat); turnNumbers.set(id, 0); notify('chats-changed'); return json(res, 200, { id, title: chat.title }); }
   const chatMatch = /^\/api\/chats\/([^/]+)(?:\/(stream|steer|dismiss))?$/.exec(pathname);
   if (chatMatch) {

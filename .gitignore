@@ -18,3 +18,8 @@ oauth.json
 
 # dev-fresh launcher scratch (fresh-user sim): disposable per launch
 .fresh-data/
+
+# Phone preview captures and Expo build output.
+mobile/.preview/
+mobile/.expo/
+mobile/expo-env.d.ts
