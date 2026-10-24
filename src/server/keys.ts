@@ -53,6 +53,7 @@ import {
 } from "../core/auth-keys.ts";
 import { authStore } from "../store/auth.ts";
 import { hasOAuthCredential } from "../store/oauth.ts";
+import { claudeCodeStatus } from "../agent/claude-code.ts";
 
 // The once-per-process boot record — globalThis anchor (HMR re-imports the
 // module; the snapshot must not re-run and misread fill-gapped vars as real
@@ -209,6 +210,7 @@ export function keyValue(id: string): string | undefined {
  * lookup it uses. Providers without a key entry need no gate. */
 export function providerKeyPresent(provider: string): boolean {
 	if (provider === "openai" && hasOAuthCredential(provider)) return true;
+	if (provider === "claude-code") return claudeCodeStatus().loggedIn;
 	const info = AUTH_PROVIDER_KEYS.find((p) => p.id === provider);
 	return info ? keyValue(info.envVar) !== undefined : true;
 }

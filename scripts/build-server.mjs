@@ -35,6 +35,8 @@ if (!exists(staticFrom)) {
 	process.exit(1);
 }
 copyTree(staticFrom, staticTo);
+fs.mkdirSync(path.join(STANDALONE, "scripts"), { recursive: true });
+fs.copyFileSync(path.join(ROOT, "scripts", "claude-code-mcp.mjs"), path.join(STANDALONE, "scripts", "claude-code-mcp.mjs"));
 if (exists(path.join(ROOT, "public"))) {
 	copyTree(path.join(ROOT, "public"), path.join(STANDALONE, "public"));
 }

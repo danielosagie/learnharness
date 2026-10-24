@@ -48,13 +48,14 @@ Future teaching sessions can read the graph instead of starting from scratch. Pr
 - **Windows (x64):** run the installer. It is currently unsigned; Windows may show an “unknown publisher” or SmartScreen warning.
 - **Linux (x64):** make the AppImage executable and open it, or install the Debian/Ubuntu `.deb`.
 
-Add your provider API key and choose your models, then start a session with what you want to understand. LearnHarness supports 30+ provider options, including OpenAI, Anthropic, Google, DeepSeek, and OpenRouter. Optional dictation and web search use separate service keys.
+Add a provider API key or connect Claude Code, choose your models, then start a session with what you want to understand. LearnHarness supports 30+ provider options, including OpenAI, Anthropic, Google, DeepSeek, and OpenRouter. Optional dictation and web search use separate service keys.
 
 All three platforms support in-app updates.
 
 ## Your keys, your data
 
-- **Your keys and models.** No LearnHarness subscription or markup. Add provider API keys, or sign in with ChatGPT Plus or Pro in Settings → Keys to use OpenAI models through your subscription. Subscription turns keep token counts and show $0 in the cost meter; API key turns use provider prices.
+- **Your keys and models.** No LearnHarness subscription or markup. Add provider API keys, or use a subscription you already have: sign in with ChatGPT Plus or Pro in Settings → Keys for OpenAI models, or connect Claude Code for Claude models. Subscription turns keep token counts and show $0 in the cost meter; API key turns use provider prices.
+- **Claude Code subscription.** Install and sign in to Claude Code, then choose a Claude model in any model slot. LearnHarness invokes your unmodified local `claude` binary; it never reads or intermediates your Claude login tokens.
 - **Local storage.** Your chats, graph, settings, API keys, and ChatGPT sign-in credential live on your machine. Learning records are plain files you can inspect. API keys remain in `auth.json`; the subscription credential is in a separate mode-0600 `oauth.json` beside it.
 - **External services.** Models run through your configured providers. Model requests send the context needed for the task; web research and dictation also contact external services. Local storage does not mean offline processing.
 - **Inspectable behavior.** System prompts are visible and editable. The app is open source under the AGPL-3.0 license.
