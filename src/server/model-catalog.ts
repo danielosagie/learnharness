@@ -11,10 +11,8 @@
  * (getSupportedThinkingLevels / clampThinkingLevel). This module only
  * projects and validates — no second registry to drift out of sync.
  *
- * Federation: `getModels()` is called per keyed provider (federated, the
- * model-slots wave), so a provider appears in the picker exactly when its
- * key is present — piModels() in src/agent/models.ts owns the provider
- * set; nothing here changes.
+ * Federation: `getModels()` is called per configured provider. The same
+ * key-or-subscription gate protects picker selection and turn execution.
  */
 
 import { clampThinkingLevel, getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
@@ -22,7 +20,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { piModels } from "../agent/models.ts";
 import { settingsStore } from "../store/settings.ts";
 import { effectiveSettings } from "./stores.ts";
-import { keyValue } from "./keys.ts";
+import { providerKeyPresent } from "./keys.ts";
 import type { ChatSettings } from "../core/contracts/chat.ts";
 import type {
 	CatalogDefaults,
@@ -116,15 +114,13 @@ export function catalogSlots(): SlotPins {
 	return pins;
 }
 
-/** The providers surface (model slots wave, 2026-09-20): one row per
- *  plain-key model provider (core/auth-keys.ts's pi-ai-derived table),
- *  with keyPresent read env-wins through the keys seam, fresh per call —
- *  saving a key immediately federates the provider into the picker. */
+/** The providers surface: one row per model provider, gated by the same
+ *  key-or-subscription truth used at the turn boundary. */
 export function catalogProviders(): CatalogProvider[] {
 	return AUTH_PROVIDER_KEYS.map((p) => ({
 		id: p.id,
 		envVar: p.envVar,
-		keyPresent: keyValue(p.envVar) !== undefined,
+		keyPresent: providerKeyPresent(p.id),
 	})).sort((a, b) => a.id.localeCompare(b.id));
 }
 

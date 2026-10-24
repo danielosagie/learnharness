@@ -53,13 +53,22 @@ export function persistTurn(
 	baseCount: number,
 	turnMessages: readonly AgentMessage[],
 	isAborted: boolean,
+	billing?: "subscription",
 ): LhMessage[] {
 	try {
 		const record = chatStore.getChat(chatId);
 		if (!record) return [];
 		const stamped: LhMessage[] = [];
 		for (const m of turnMessages.slice(baseCount)) {
-			const message = m as LhMessage;
+			let message = m as LhMessage;
+			// Native pi history is persisted too; its catalog-priced cost must
+			// agree with the subscription marker in the parallel usage log.
+			if (billing === "subscription" && message.role === "assistant" && message.usage?.cost) {
+				message = {
+					...message,
+					usage: { ...message.usage, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				};
+			}
 			// The placeholder question result: loop device, never a record fact.
 			if (
 				(message as { role?: string }).role === "toolResult" &&

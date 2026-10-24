@@ -306,6 +306,7 @@ export async function handleChatInput(
 	const steps: CallUsage[] = [];
 	const collectUsage = (usage: Usage) => {
 		steps.push({
+			...(conversationEngine.subscription ? { billing: "subscription" as const } : {}),
 			inputTokens: usage.input,
 			outputTokens: usage.output,
 			cacheReadTokens: usage.cacheRead,
@@ -460,7 +461,7 @@ export async function handleChatInput(
 			onFinish: (turnMessages, isAborted) => {
 				// Wave B: the record write is the agent's own final state —
 				// the new messages are the slice past the merged base.
-				const stamped = persistTurn(stores.chatStore, chatId, merged.length, turnMessages, isAborted);
+				const stamped = persistTurn(stores.chatStore, chatId, merged.length, turnMessages, isAborted, engine.subscription ? "subscription" : undefined);
 				// usage log append (idempotent per turn id) — the stats bar
 				// refolds this on the client after the turn settles. The
 				// provenance message is the turn's FIRST new assistant message.

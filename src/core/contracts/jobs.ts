@@ -42,6 +42,7 @@ export interface JobRecord {
  * field NO model call reported stays undefined — absent is not zero (the
  * money-channel doctrine; cost renders "—", never $0). */
 export interface JobUsage {
+	billing?: "subscription";
 	/** The model that ran the sub-agent, provider-qualified ("provider:id" —
 	 *  model slots wave, 2026-09-20; matches PRICES' uniform keys). */
 	model: string;

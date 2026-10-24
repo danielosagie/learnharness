@@ -147,6 +147,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 			chatId,
 			onUsage: (step) => {
 				const next = accumulateJobUsage(usageTotals.get(jobId), model, step);
+					if (engine.subscription) next.billing = "subscription";
 				usageTotals.set(jobId, next);
 				jobStore.updateJob(jobId, { usage: next }); // merge patch — status untouched
 			},

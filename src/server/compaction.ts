@@ -234,6 +234,7 @@ async function compact(deps: CompactionDeps, chatId: string): Promise<void> {
 			model: deps.modelId,
 			steps: [
 				{
+					...(deps.engine.subscription ? { billing: "subscription" as const } : {}),
 					inputTokens: usage.input,
 					outputTokens: usage.output,
 					cacheReadTokens: usage.cacheRead,
