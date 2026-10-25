@@ -18,6 +18,9 @@ const config: ExpoConfig = {
 			NSLocalNetworkUsageDescription: "Connect to LearnHarness on your computer.",
 			NSCameraUsageDescription: "Scan the pairing code on your computer.",
 			NSMicrophoneUsageDescription: "Speak a message to your tutor.",
+			// A dependency links photo-library APIs; Apple rejects the upload (ITMS-90683) without these strings, though the app never asks.
+			NSPhotoLibraryUsageDescription: "LearnHarness does not use your photo library.",
+			NSPhotoLibraryAddUsageDescription: "LearnHarness does not save to your photo library.",
 			NSSpeechRecognitionUsageDescription: "Turn your speech into text on this phone.",
 			ITSAppUsesNonExemptEncryption: false,
 		},
