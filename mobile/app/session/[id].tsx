@@ -76,7 +76,7 @@ export default function SessionScreen() {
 	useSpeechRecognitionEvent("end", () => setRecognizing(false));
 	useSpeechRecognitionEvent("result", (event) => { const transcript = event.results[0]?.transcript; if (transcript) setDraft((old) => `${old}${old && !old.endsWith(" ") ? " " : ""}${transcript}`); });
 	useEffect(() => session.subscribe(() => update((v) => v + 1)), [session]);
-	useFocusEffect(useCallback(() => { if (foreground) void session.open(prompt); else session.close(); return () => session.close(); }, [session, foreground]));
+	useFocusEffect(useCallback(() => { if (foreground) void session.open(prompt); else session.close(); return () => session.close(); }, [session, foreground, prompt]));
 	useEffect(() => { void session.resync(); }, [session, eventVersion]);
 	const state = session.state;
 	const record = state.record;

@@ -114,3 +114,20 @@ it("polls the normal-send 409 race and keeps optimistic content until record ado
 	finishLoad(); await pending;
 	assert.equal(session.messages.length, 1); assert.equal(session.messages[0]!.id, "server-user");
 });
+
+it("retains a new-session prompt when an event resync already owns the load", async () => {
+	let finish!: () => void;
+	let posts = 0;
+	let releaseLoad = new Promise<void>((resolve) => { finish = resolve; });
+	const client = {
+		json: async () => { await releaseLoad; return { id: "new", title: "New", messages: [], turnInFlight: false }; },
+		api: async (_path: string, init: RequestInit) => { assert.equal(JSON.parse(String(init.body)).input.text, "Practice what's due"); posts++; return new Response('{}'); },
+		stream: async function* () { yield { event: "message", data: "[DONE]" }; },
+	};
+	const session = new PhoneSession(client as any, "new");
+	const first = session.resync();
+	await session.open("Practice what's due");
+	finish(); await first;
+	for (let i = 0; i < 10 && session.state.busy; i++) await new Promise((resolve) => setTimeout(resolve, 1));
+	assert.equal(posts, 1); session.close();
+});

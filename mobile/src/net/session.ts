@@ -17,6 +17,8 @@ export class PhoneSession {
 	private submitting = false;
 	private syncGeneration: number | null = null;
 	private sentPrompt = false;
+	// An event resync can own the first load before navigation supplies its prompt.
+	private initialPrompt?: string;
 	constructor(readonly client: PhoneClient, readonly id: string) {}
 	get isAttached(): boolean { return this.abort !== null; }
 	subscribe(fn: () => void): () => void { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -37,13 +39,14 @@ export class PhoneSession {
 		await this.resync(prompt);
 	}
 	async resync(prompt?: string): Promise<void> {
+		if (prompt) this.initialPrompt = prompt;
 		if (!this.active || this.isAttached || this.submitting || this.syncGeneration === this.generation) return;
 		const generation = this.generation;
 		this.syncGeneration = generation;
 		try {
 			const record = await this.load();
 			if (!this.active || generation !== this.generation) return;
-			if (prompt && !this.sentPrompt) { this.sentPrompt = true; void this.send({ type: "text", text: prompt }); }
+			if (this.initialPrompt && !this.sentPrompt) { this.sentPrompt = true; void this.send({ type: "text", text: this.initialPrompt }); }
 			else if (record.turnInFlight) void this.attach();
 			else if (needsContinuation(record.messages)) void this.send({ type: "continue" });
 		} catch (e) { if (this.active && generation === this.generation) this.patch({ error: (e as Error).message }); }
