@@ -59,13 +59,19 @@ describe("phone access", () => {
 	});
 
 	it("reports a visible error when the fixed port is occupied", async () => {
+		const funnel = (state() as unknown as { funnel: InstanceType<typeof PhoneFunnel> }).funnel;
+		const disable = funnel.disable.bind(funnel);
+		let cleaned = false;
+		funnel.disable = async () => { cleaned = true; };
 		const blocker = createServer();
 		await new Promise<void>((resolve) => blocker.listen(PHONE_PORT, "127.0.0.1", resolve));
 		try {
 			await setPhoneEnabled(true);
 			assert.deepEqual(phoneStatus().status, { state: "error", message: "Port 4791 is in use" });
+			assert.equal(cleaned, true);
 		} finally {
 			await new Promise<void>((resolve) => blocker.close(() => resolve()));
+			funnel.disable = disable;
 		}
 	});
 

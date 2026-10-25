@@ -226,6 +226,8 @@ async function reconcilePhoneServer(): Promise<void> {
 			state.server = server;
 			state.address = address;
 		} catch (error) {
+			// A stale background mapping must not expose whoever owns this port now.
+			try { await state.funnel.disable(); } catch { console.warn("[phone] tailscale-cleanup-failed"); }
 			status({ state: "error", message: (error as NodeJS.ErrnoException).code === "EADDRINUSE" ? "Port 4791 is in use" : "Phone listener failed" });
 			return;
 		}
