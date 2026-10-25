@@ -7,7 +7,7 @@ import { SettingsGroup, SettingsRow, Toggle } from "./controls.tsx";
 
 interface PhoneSnapshot {
 	enabled: boolean;
-	status: { state: "off" | "listening" | "no-tailscale" | "error"; address?: string; message?: string };
+	status: { state: "off" | "listening" | "no-tailscale" | "needs-approval" | "error"; address?: string; mode?: "public"; approveUrl?: string; message?: string };
 	devices: Array<{ id: string; name: string; createdAt: string; lastSeenAt: string }>;
 	pairing: { code: string; link: string; expiresAt: string } | null;
 }
@@ -69,14 +69,17 @@ export function PhoneSection() {
 	const pairing = snapshot?.pairing;
 	const seconds = pairing ? Math.max(0, Math.ceil((Date.parse(pairing.expiresAt) - now) / 1_000)) : 0;
 	const state = snapshot?.status;
-	const status = state?.state === "listening" ? `On · ${state.address}:4791`
-		: state?.state === "no-tailscale" ? "Tailscale isn't running on this computer"
+	const status = state?.state === "listening" ? "On · reachable from anywhere"
+		: state?.state === "no-tailscale" ? "Install and sign in to Tailscale on this computer"
+		: state?.state === "needs-approval" ? "Approve Tailscale Funnel once so your phone can connect without Tailscale"
 		: state?.state === "error" ? state.message ?? "Phone access failed"
 		: "Off";
 	return <>
 		<SettingsRow label="Phone access" hint={status} testid="row-phone-access">
 			<Toggle checked={snapshot?.enabled ?? false} disabled={!snapshot} label="phone access" onChange={(enabled) => void request("/api/phone", "PUT", { enabled })} />
 		</SettingsRow>
+		{state?.state === "needs-approval" && state.approveUrl && <button type="button" className="self-start text-xs underline" onClick={() => window.open(state.approveUrl, "_blank")}>Approve in Tailscale</button>}
+		{state?.state === "no-tailscale" && <a className="text-xs underline" href="https://tailscale.com/download" target="_blank" rel="noreferrer">Download Tailscale</a>}
 		{error && <p role="alert" className="text-xs text-red-500">{error}</p>}
 		{state?.state === "listening" && <SettingsGroup label="Pair a phone">
 			<button type="button" className="self-start rounded-sm border border-border px-3 py-1.5 text-xs hover:bg-accent" onClick={() => void request("/api/phone/pairing", "POST")}>Pair a phone</button>
@@ -89,6 +92,7 @@ export function PhoneSection() {
 			</div>}
 		</SettingsGroup>}
 		<SettingsGroup label="Paired devices">
+			{snapshot?.devices.length === 0 && <p className="text-xs text-muted-foreground">No phones yet</p>}
 			{snapshot?.devices.map((device) => <SettingsRow key={device.id} label={`${device.name} · last used ${ago(device.lastSeenAt, now)}`}>
 				<button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void request(`/api/phone/devices/${encodeURIComponent(device.id)}`, "DELETE")}>Remove</button>
 			</SettingsRow>)}

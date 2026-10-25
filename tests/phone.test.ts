@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
-import type { NetworkInterfaceInfo } from "node:os";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,7 +8,8 @@ import { after, describe, it } from "node:test";
 const data = mkdtempSync(path.join(tmpdir(), "lh-phone-test-"));
 process.env.LH_DATA_DIR = data;
 process.env.LH_PHONE_HOST = "127.0.0.1";
-const { tailscaleAddress, mintPairing, setPhoneEnabled, removePhoneDevice, phoneStatus, PHONE_PORT, normalizePhoneCode, phoneUpstreamPort } = await import("../src/server/phone.ts");
+const { mintPairing, setPhoneEnabled, removePhoneDevice, phoneStatus, PHONE_PORT, normalizePhoneCode, phoneUpstreamPort } = await import("../src/server/phone.ts");
+const { PhoneFunnel } = await import("../src/server/phone-funnel.ts");
 const { parsePhoneSettingsBody } = await import("../src/server/settings-body.ts");
 const { withTurnHeartbeat } = await import("../src/server/pi/ui-stream.ts");
 const management = await import("../app/api/phone/route.ts");
@@ -18,6 +18,9 @@ const deviceRoute = await import("../app/api/phone/devices/[id]/route.ts");
 const state = () => (globalThis as unknown as Record<symbol, {
 	pairing?: { code: string; link: string; expiresAt: string }; server?: Server; timer?: ReturnType<typeof setInterval>; clock: () => number; failures: number[]; blockedUntil: number;
 }>)[Symbol.for("lh.phone")]!;
+// The HTTP-door tests inject an approved edge; orchestration is tested separately.
+phoneStatus();
+(state() as unknown as { funnel: InstanceType<typeof PhoneFunnel> }).funnel = new PhoneFunnel(async (_file, args) => args[0] === "status" ? JSON.stringify({ BackendState: "Running", Self: { ID: "fake", DNSName: "test.tailnet.ts.net.", CapMap: { funnel: [], https: [] } } }) : JSON.stringify({ TCP: { "8443": { HTTPS: true } }, Web: { "test.tailnet.ts.net:8443": { Handlers: { "/": { Proxy: "http://127.0.0.1:4791" } } } }, AllowFunnel: { "test.tailnet.ts.net:8443": true } }), async () => "fake");
 let upstream: Server | undefined;
 const phone = (route: string, options?: RequestInit) => fetch(`http://127.0.0.1:${PHONE_PORT}${route}`, options);
 const json = (body: object): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -41,14 +44,6 @@ describe("phone access", () => {
 		assert.equal(phoneUpstreamPort({}), 3000);
 	});
 
-	it("requires both Tailscale addresses on the same non-loopback interface", () => {
-		const v4 = (address: string, internal = false) => ({ address, family: "IPv4", internal }) as NetworkInterfaceInfo;
-		const v6 = (address: string) => ({ address, family: "IPv6", internal: false }) as NetworkInterfaceInfo;
-		const sample = { warp: [v4("100.101.2.3")], utun: [v6("fd7a:115c:a1e0::1"), v4("100.85.4.5")], lo: [v6("fd7a:115c:a1e0::2"), v4("100.86.4.5", true)] };
-		assert.equal(tailscaleAddress({ warp: sample.warp }), undefined);
-		assert.equal(tailscaleAddress({ warp: sample.warp, utun: sample.utun }), "100.85.4.5");
-		assert.equal(tailscaleAddress({ lo: sample.lo }), undefined);
-	});
 
 	it("validates the enabled setting", () => {
 		assert.deepEqual(parsePhoneSettingsBody({ enabled: true }), { ok: true, settings: { enabled: true } });
@@ -99,9 +94,19 @@ describe("phone access", () => {
 		await setPhoneEnabled(true);
 		assert.equal(phoneStatus().status.state, "listening");
 		assert.equal((await phone("/api/chats")).status, 401);
-		assert.equal((await (await phone("/api/phone/hello")).json() as { app: string }).app, "learnharness");
+		const hello = await (await phone("/api/phone/hello")).json();
+		assert.deepEqual(Object.keys(hello).sort(), ["app", "version"]);
+		assert.equal((state().server!.address() as { address: string }).address, "127.0.0.1");
+		for (const route of ["/", "/api/chats", "/api/events", "/api/phone", "/api/phone/pairing", "/api/phone/devices/x", "/api/phone/hello/", "/arbitrary"]) {
+			for (const method of ["GET", "POST", "PUT", "DELETE"]) {
+				assert.equal((await phone(route, { method, headers: { "Tailscale-Funnel-Request": "1" } })).status, 401, `${method} ${route}`);
+			}
+		}
+		assert.equal((await phone("/api/phone/hello", { method: "POST" })).status, 401);
+		assert.equal((await phone("/api/phone/pair")).status, 401);
 		const first = mintPairing()!;
 		const second = mintPairing()!;
+		assert.match(new URL(second.link).searchParams.get("url")!, /^https:\/\/test.tailnet.ts.net:8443$/);
 		second.code = "0011ABCD";
 		state().pairing!.code = second.code;
 		assert.notEqual(first.code, second.code);
@@ -166,6 +171,32 @@ describe("phone access", () => {
 		assert.equal((await phone("/api/phone/pair", json({ code: "BAD", deviceName: "x" }))).status, 401);
 		state().clock = Date.now;
 	});
+	it("gates pairing on Funnel readiness, rechecks approval, and removes the mapping on disable", async () => {
+		let approved = false;
+		let removed = false;
+		let config = {};
+		(state() as unknown as { funnel: InstanceType<typeof PhoneFunnel> }).funnel = new PhoneFunnel(async (_file, args) => {
+			if (args[0] === "status") return JSON.stringify({ BackendState: "Running", Self: { ID: "fake", DNSName: "test.tailnet.ts.net.", CapMap: approved ? { https: [], funnel: [] } : {} } });
+			if (args[0] === "serve") return JSON.stringify(config);
+			if (args.at(-1) === "off") { removed = true; config = {}; }
+			else config = { TCP: { "8443": { HTTPS: true } }, Web: { "test.tailnet.ts.net:8443": { Handlers: { "/": { Proxy: "http://127.0.0.1:4791" } } } }, AllowFunnel: { "test.tailnet.ts.net:8443": true } };
+			return "";
+		}, async () => "fake");
+		await setPhoneEnabled(true);
+		assert.equal(phoneStatus().status.state, "needs-approval");
+		assert.equal(mintPairing(), null);
+		approved = true;
+		await setPhoneEnabled(true);
+		assert.equal(phoneStatus().status.state, "listening");
+		assert.ok(mintPairing());
+		await setPhoneEnabled(false);
+		assert.equal(phoneStatus().status.state, "off");
+		assert.equal(phoneStatus().pairing, null);
+		assert.equal(mintPairing(), null);
+		assert.equal(state().server, undefined);
+		assert.equal(removed, true);
+	});
+
 });
 
 it("adds comment heartbeats without ending a turn stream", async () => {

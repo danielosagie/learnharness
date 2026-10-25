@@ -45,7 +45,7 @@ Secrets and machine-specific paths only. Model choice and thinking budgets are t
 | `GOOGLE_SEARCH_API_KEY` + `GOOGLE_CSE_ID` | researcher's `web_search` (Google Custom Search) |
 | `DEEPGRAM_API_KEY` | optional — dictation (STT token minting; audio streams browser→Deepgram, never through the server) |
 | `CHROME_PATH` | optional system Chrome fallback for demo verification; the app's own browser helper is primary (nothing is downloaded) |
-| `LH_PHONE_HOST` | **Test only:** bind the phone listener to this address instead of detecting a Tailscale interface; use with a throwaway `LH_DATA_DIR` |
+| `LH_PHONE_HOST` | **Test only:** override the phone listener’s default `127.0.0.1` bind; use with a throwaway `LH_DATA_DIR` and fake Tailscale CLI |
 
 The packaged desktop app takes keys from `userData/auth.json` (BYOK, mode 0600, read/written directly by the server via `LH_AUTH_FILE`). PDFs render natively with pdfjs/Skia; SVGs use resvg.
 
@@ -187,3 +187,7 @@ Nothing under `data/` is ever tracked by git. Chats, graph ledgers, jobs, positi
 ## Review calibration
 
 Run `npx tsx scripts/review-calibration.ts` to replay the configured data directory's practice chats and score every later spaced review's pre-update recall forecast against the outcome. The output is `review calibration: n=… brier=… logLoss=…`; `n=0` reports `n/a` scores. For a synthetic input, pass a JSON file with `records` (practice events) and `nodes` (graph propositions): `npx tsx scripts/review-calibration.ts fixture.json`. No model calls or writes occur.
+
+Phone access proxies through Tailscale Funnel on HTTPS port 8443 to the paired listener at `127.0.0.1:4791`. Enable it in Settings → Phone; if approval is needed, use “Approve in Tailscale” once. The existing 30-second tripwire detects approval and repairs the mapping. Other Serve mappings are preserved. CLI status calls have a 3.5-second deadline; setup and removal have a 10-second deadline. Errors log only a short code.
+
+For a deterministic desktop state walk, run `flock /tmp/lh-gates.lock node scripts/phone-funnel-live.mjs`. It installs a fake CLI on a temporary PATH, waits for automatic approval detection, checks authenticated forwarding and SSE, measures 50 direct and proxy requests, revokes the phone, disables access, and verifies mapping removal and port cleanup. No real Tailscale or model calls are made.

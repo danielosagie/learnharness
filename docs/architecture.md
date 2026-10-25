@@ -536,7 +536,7 @@ Every place the architecture is designed to be cut — the "one file" a future c
 | Agent construction (tests) | `handleChatRequest(req, buildAgent?)` | scripted engines, no refactor |
 | Sub-agent verification | `sub-agents/headless.ts` (`headlessOverride`) | demo/SVG verification, no Chrome |
 | Data location (Electron) | `LH_DATA_DIR` env (`config.ts` PATHS) | where data/ lives, nothing else |
-| Paired phone access | `instrumentation.ts` + `src/server/phone.ts` + `src/store/phone-devices.ts` | the opt-in Tailscale listener, pairing and proxy, and hashed device tokens |
+| Paired phone access | `instrumentation.ts` + `src/server/phone.ts` + `src/server/phone-funnel.ts` + `src/store/phone-devices.ts` | loopback pairing and proxy, bounded Tailscale Funnel orchestration, and hashed device tokens |
 | Desktop host | `electron/main.cjs` | launcher/security shell only |
 | Dictation | `components/dictation-paste.tsx` (focused-field routing) + `components/dictation.tsx` (engine and target) + `src/server/handy.ts` (host command adapter) | Handy paste/CLI or Deepgram streaming; the primary target and `joinDictation` define shared append behavior |
 
