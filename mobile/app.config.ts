@@ -22,6 +22,7 @@ const config: ExpoConfig = {
 			ITSAppUsesNonExemptEncryption: false,
 		},
 	},
+	extra: { eas: { projectId: "cbf01ed3-ee72-4a43-8800-0397b3c0bb40" } },
 	plugins: ["expo-router", "expo-secure-store", "expo-camera", "expo-speech-recognition", ["expo-splash-screen", { backgroundColor: "#141414" }]],
 };
 export default config;
