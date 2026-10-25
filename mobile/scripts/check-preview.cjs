@@ -12,7 +12,7 @@ const { chromium } = require('playwright');
 		await page.goto(base + '/'); await page.getByText('ENTER CODE INSTEAD', { exact: true }).waitFor();
 		await page.getByText('ENTER CODE INSTEAD', { exact: true }).click();
 		const code = page.getByPlaceholder('CODE1234'); await code.fill('abodl234'); assert.equal(await code.inputValue(), 'AB0D1234');
-		await page.getByPlaceholder('100.x.y.z or computer.tailnet').fill('127.0.0.1'); await code.fill('ABCD1234');
+		await page.getByPlaceholder('computer.ts.net or IP').fill('127.0.0.1'); await code.fill('ABCD1234');
 		await page.getByText('PAIR PHONE', { exact: true }).click(); await page.getByText('DUE FOR REVIEW', { exact: true }).waitFor();
 		await page.reload(); await page.getByText('The chain rule', { exact: true }).waitFor();
 		const statusVisible = await page.getByText('9:41', { exact: true }).isVisible();
@@ -37,7 +37,7 @@ const { chromium } = require('playwright');
 	await page.unrouteAll({ behavior: 'wait' });
 	await check('computer unreachable', async () => {
 		await page.route('**/api/phone/hello', (r) => r.abort('failed'));
-		await page.goto(base + '/'); await page.getByText('Can’t reach MacBook. Is LearnHarness open and Tailscale on?', { exact: true }).waitFor();
+		await page.goto(base + '/'); await page.getByText("Can't reach MacBook. Is LearnHarness open on your computer?", { exact: true }).waitFor();
 		return { messageShown: true };
 	});
 	await page.unrouteAll({ behavior: 'wait' });

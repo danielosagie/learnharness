@@ -13,7 +13,7 @@ const path = require('node:path');
 	await page.waitForTimeout(1000);
 	await page.screenshot({ path: path.join(out, '06-pair.png') });
 	await page.getByText('ENTER CODE INSTEAD', { exact: true }).click();
-	await page.getByPlaceholder('100.x.y.z or computer.tailnet').fill('127.0.0.1');
+	await page.getByPlaceholder('computer.ts.net or IP').fill('127.0.0.1');
 	await page.getByPlaceholder('CODE1234').fill('ABCD1234');
 	await page.getByText('PAIR PHONE', { exact: true }).click();
 	await page.getByText('DUE FOR REVIEW', { exact: true }).waitFor();
