@@ -15,7 +15,7 @@ const config: ExpoConfig = {
 		supportsTablet: false,
 		infoPlist: {
 			NSAppTransportSecurity: { NSAllowsArbitraryLoads: true },
-			NSLocalNetworkUsageDescription: "Connect to LearnHarness on your computer over Tailscale.",
+			NSLocalNetworkUsageDescription: "Connect to LearnHarness on your computer.",
 			NSCameraUsageDescription: "Scan the pairing code on your computer.",
 			NSMicrophoneUsageDescription: "Speak a message to your tutor.",
 			NSSpeechRecognitionUsageDescription: "Turn your speech into text on this phone.",

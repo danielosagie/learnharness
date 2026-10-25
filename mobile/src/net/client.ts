@@ -18,20 +18,30 @@ export function parsePairingLink(link: string): { url: string; code: string } {
 	if (parsed.protocol !== "learnharness:" || parsed.hostname !== "pair") throw new Error("Invalid pairing link");
 	const url = parsed.searchParams.get("url") ?? "";
 	const code = parsed.searchParams.get("code") ?? "";
-	if (!/^http:\/\/[^/?#]+:4791$/.test(url) || !/^[A-Za-z0-9]{8}$/.test(code)) throw new Error("Invalid pairing details");
-	return { url, code };
+	if (!/^https?:\/\//.test(url) || !/^[A-Za-z0-9]{8}$/.test(code)) throw new Error("Invalid pairing details");
+	return { url: hostUrl(url), code };
 }
 export function hostUrl(host: string): string {
-	const clean = host.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
-	if (!/^[a-zA-Z0-9.:-]+$/.test(clean) || !clean) throw new Error("Enter the computer's Tailscale IP or name.");
-	return `http://${clean.replace(/:4791$/, "")}:4791`;
+	const clean = host.trim();
+	try {
+		if (!clean || /[\s/?#@]/.test(clean.replace(/^https?:\/\//, "").replace(/\/$/, ""))) throw new Error();
+		const explicit = /^https?:\/\//.test(clean);
+		const parsed = new URL(explicit ? clean : `http://${clean}`);
+		if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash || !parsed.hostname) throw new Error();
+		if (!explicit) {
+			const publicHost = parsed.hostname.toLowerCase().endsWith(".ts.net");
+			parsed.protocol = publicHost ? "https:" : "http:";
+			if (!parsed.port) parsed.port = publicHost ? "8443" : "4791";
+		}
+		return parsed.origin;
+	} catch { throw new Error("Enter your computer's address."); }
 }
 export class PhoneClient {
 	private credentials: Credentials | null = null;
 	constructor(private readonly storage: CredentialStore, private readonly fetchLike: FetchLike, private readonly onRemoved?: (name: string) => void) {}
 	async restore(): Promise<Credentials | null> { this.credentials = await this.storage.get(); return this.credentials; }
 	get paired(): Credentials | null { return this.credentials; }
-	async hello(url = this.credentials?.url, signal?: AbortSignal): Promise<{ app: string; version: string; name: string }> {
+	async hello(url = this.credentials?.url, signal?: AbortSignal): Promise<{ app: string; version: string }> {
 		if (!url) throw new Error("No computer address");
 		const res = await this.fetchLike(`${url}/api/phone/hello`, { signal });
 		if (!res.ok) throw new ApiError(res.status, "Can't reach LearnHarness");

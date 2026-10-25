@@ -1,6 +1,6 @@
 # LearnHarness phone app
 
-This is the iPhone client for a LearnHarness computer on the same Tailscale network. It uses the computer's `/api/phone/*` pairing endpoints and keeps the bearer token in iOS SecureStore. The app imports its domain projection and answer logic directly from `../src/core/`.
+This is the iPhone client for a LearnHarness computer. The desktop uses Tailscale Funnel to provide a public HTTPS address; the phone needs only LearnHarness. It uses the computer's `/api/phone/*` pairing endpoints and keeps the bearer token in iOS SecureStore. The app imports its domain projection and answer logic directly from `../src/core/`.
 
 ## Run against the mock on a Mac
 
@@ -18,7 +18,7 @@ npm install
 npx expo start --dev-client
 ```
 
-Open the iOS simulator development build, tap **Enter code instead**, enter `127.0.0.1` for the host and the code printed by the mock. The mock provides the recorded chain-rule session, due reviews, replayed turns, and a synthetic practice problem and result. On a physical iPhone, use the Mac's Tailscale IP or MagicDNS name instead of `127.0.0.1`; both devices must be on Tailscale.
+Open the iOS simulator development build, tap **Enter code instead**, enter `127.0.0.1` for the host and the code printed by the mock. The mock provides the recorded chain-rule session, due reviews, replayed turns, and a synthetic practice problem and result. On a physical iPhone, pair with the desktop's Settings → Phone QR code. Manual entry accepts the full HTTPS URL, a `.ts.net` name (HTTPS port 8443), or a host/IP (HTTP port 4791 for local development).
 
 A fresh development build is required after changing native dependencies. The `development` EAS profile targets the simulator. The `simulator` profile makes a release simulator build, and `production` is reserved for TestFlight after the EAS project is linked. This repo intentionally has no EAS project ID.
 
@@ -78,3 +78,19 @@ NODE_PATH=/home/daniel/CodeProjects/scout/node_modules node mobile/scripts/check
 ```
 
 They exercise manual-code normalization, no pairing, no reviews, empty sessions, 503, unreachable computer, two-line truncation, and revocation. Measured receipts go to `mobile/.preview/manual-browser.json`.
+
+## Sample lesson for public TestFlight
+
+On Pair, tap **Try a sample lesson**. Home shows **SAMPLE**, 12 due ideas, and the recorded chain-rule lesson. Open it, answer the check, and watch the next recorded turn stream. **Practice what's due** runs a scripted problem → work → result → next cycle. This is bundled data, with no API requests or AI calls. The sample's conclusion is scripted, so it demonstrates the flow rather than grading arbitrary work.
+
+Tap **SAMPLE**, then **Pair with your computer**, to leave. Demo state is held in memory, resets when you leave, and never reads or writes SecureStore credentials. Existing computer credentials are preserved. The native app can run the sample in airplane mode; the web preview still loads its static JavaScript assets from the preview server.
+
+`src/sample/transport.ts` implements the in-memory `FetchLike` used by both the app and `scripts/mock-server.mjs`. The compact fixture in `src/sample/lesson.json` is generated from recorded teaching messages by `node scripts/build-sample.mjs`; model thinking and bookkeeping are removed. The multi-megabyte raw test fixtures stay outside the app bundle. The Node mock requires Node 22.18+ for TypeScript stripping.
+
+With the exported browser preview server running, capture Pair v2 and sample Home and exercise the sample with API requests blocked:
+
+```sh
+flock /tmp/lh-gates.lock env NODE_PATH=/home/daniel/CodeProjects/scout/node_modules node mobile/scripts/public-preview.cjs
+```
+
+It writes `.preview/06-pair-v2.png`, `.preview/01-home-sample.png`, and `.preview/public-browser.json`. The existing six-screen preview remains available with the opt-in mock. EAS submission, Apple Beta App Review, and the public TestFlight link are handled from the Mac after native review.

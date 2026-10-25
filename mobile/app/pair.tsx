@@ -11,7 +11,7 @@ import { C, font } from "../src/ui/theme";
 export default function Pair() {
 	const bottom = useBottomSpace(44);
 	const params = useLocalSearchParams<{ url?: string; code?: string }>();
-	const { client, refresh, removed } = usePhone();
+	const { client, refresh, removed, startDemo } = usePhone();
 	const [permission, requestPermission] = useCameraPermissions();
 	const [manual, setManual] = useState(false);
 	const [host, setHost] = useState("");
@@ -38,7 +38,7 @@ export default function Pair() {
 		{removed && <Text style={{ color: C.miss, fontFamily: font.prose, marginTop: 16 }}>This phone was removed from {removed}. Pair again.</Text>}
 		</View>
 		{manual ? <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center", gap: 14 }}>
-			<Label>Computer address</Label><TextInput value={host} onChangeText={setHost} placeholder="100.x.y.z or computer.tailnet" placeholderTextColor={C.muted} autoCapitalize="none" style={{ backgroundColor: C.raised, color: C.text, borderColor: C.line, borderWidth: 1, borderRadius: 10, padding: 16, fontFamily: font.mono }} />
+			<Label>Computer address</Label><TextInput value={host} onChangeText={setHost} placeholder="computer.ts.net or IP" placeholderTextColor={C.muted} autoCapitalize="none" style={{ backgroundColor: C.raised, color: C.text, borderColor: C.line, borderWidth: 1, borderRadius: 10, padding: 16, fontFamily: font.mono }} />
 			<Label>8-character code</Label><TextInput value={code} onChangeText={(value) => setCode(normalizePhoneCode(value))} placeholder="CODE1234" placeholderTextColor={C.muted} autoCapitalize="characters" maxLength={8} style={{ backgroundColor: C.raised, color: C.text, borderColor: C.line, borderWidth: 1, borderRadius: 10, padding: 16, fontFamily: font.mono }} />
 			<Button disabled={busy || code.length !== 8} onPress={() => { try { void pair(hostUrl(host), code); } catch (e) { setError((e as Error).message); } }}>PAIR PHONE</Button>
 		</View> : <Pressable onPress={() => { if (!permission?.granted) void requestPermission(); }} style={{ alignItems: "center", marginTop: 40 }}>
@@ -51,7 +51,7 @@ export default function Pair() {
 		</Pressable>}
 		{!manual && <View style={{ flex: 1 }} />}<View style={{ paddingHorizontal: 24, paddingBottom: bottom, gap: 18 }}>
 		{error ? <Text style={{ color: C.miss, fontFamily: font.prose, marginBottom: 12 }}>{error}</Text> : null}
-		<Text style={{ color: C.muted, fontFamily: font.mono, fontSize: 12, textAlign: "center", lineHeight: 16, marginHorizontal: -4 }}>Your phone and computer must both be on Tailscale.</Text>
-		<Button secondary onPress={() => setManual(!manual)}>{manual ? "SCAN CODE INSTEAD" : "ENTER CODE INSTEAD"}</Button></View>
+		<Button secondary onPress={() => setManual(!manual)}>{manual ? "SCAN CODE INSTEAD" : "ENTER CODE INSTEAD"}</Button>
+		<Pressable accessibilityRole="link" hitSlop={10} style={{ height: 24, paddingTop: 4, alignItems: "center", justifyContent: "center" }} onPress={() => { startDemo(); router.replace("/"); }}><Text style={{ color: C.muted, fontFamily: font.prose, fontSize: 16, lineHeight: 20, textDecorationLine: "underline" }}>Try a sample lesson</Text></Pressable></View>
 	</Screen>;
 }
